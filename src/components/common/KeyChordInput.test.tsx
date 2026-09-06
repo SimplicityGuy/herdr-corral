@@ -193,6 +193,22 @@ describe('KeyChordInput', () => {
     expect(onCommit).toHaveBeenCalledWith('prefix+ctrl+v')
   })
 
+  it('settles when focus leaves from the prefix+ toggle rather than the field', async () => {
+    const user = userEvent.setup()
+    const { field, onCommit } = setup('')
+    render(<button type="button">elsewhere</button>)
+
+    await user.type(field, 'ctrl+v')
+    await user.tab()
+    expect(screen.getByRole('checkbox', { name: `prefix+ for ${NAME}` })).toHaveFocus()
+    expect(onCommit).not.toHaveBeenCalled()
+
+    // The handler is on the control, not the text field, so leaving from any
+    // child of it settles the value.
+    await user.click(screen.getByRole('button', { name: 'elsewhere' }))
+    expect(onCommit).toHaveBeenCalledWith('ctrl+v')
+  })
+
   it('says so when a key has no herdr spelling, instead of looking deaf', async () => {
     const user = userEvent.setup()
     const { record, onRecord } = setup()

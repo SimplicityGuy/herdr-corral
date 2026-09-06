@@ -96,6 +96,23 @@ function useDraft(current: string): [string, (next: string) => void] {
   return [draft, setDraft]
 }
 
+/**
+ * True when settling `draft` would actually change `current`.
+ *
+ * The store deliberately cannot answer this. A setting nobody has touched is
+ * *unset*, and writing its documented default is a real edit by invariant 2 —
+ * the difference between "herdr decides" and "I decided, and I decided this" —
+ * so the store's own no-op guard never fires for one. Which means a field that
+ * writes whatever it is handed records an edit for a row the user only focused
+ * and left, and the export grows lines under a header promising only the
+ * settings that differ from the defaults.
+ *
+ * Whitespace is not a change either: a value is written trimmed.
+ */
+function pendingAgainst(current: string | null, draft: string): boolean {
+  return draft.trim() !== (current ?? '').trim()
+}
+
 /** herdr's documented default for a binding, as the row prints it. */
 function defaultLabel(path: string): string {
   const value = defaultOf(path)
@@ -169,11 +186,16 @@ function BindingRow({
   // A draft the file already holds is the file's problem, and `validate()` is
   // already saying so on this row; only an edit that will not be written needs
   // the field to explain itself.
-  const pending = draft.trim() !== (current ?? '').trim()
-  const problem = pending ? bindingProblem(path, draft) : null
+  const problem = pendingAgainst(current, draft) ? bindingProblem(path, draft) : null
 
   function apply(next: string): void {
     setDraft(next)
+    // Settling a value the row already shows is not an edit. The store cannot
+    // tell: a binding sitting on its schema default is *unset*, so writing that
+    // same string back is a real change by invariant 2 — an explicit default —
+    // and focusing a row and leaving it would put one in the file. The field is
+    // the only place that knows the user did not choose it.
+    if (!pendingAgainst(current, next)) return
     if (bindingProblem(path, next) !== null) return
     if (next.trim() === '') resetKey(path)
     else setKey(path, next.trim())
@@ -288,11 +310,11 @@ function CommandRow({
   const keyPath = commandField(index, 'key')
   const chord = singleChord(entry.key)
   const [draft, setDraft] = useDraft(chord ?? '')
-  const pending = draft.trim() !== (chord ?? '').trim()
-  const problem = pending ? bindingProblem(keyPath, draft) : null
+  const problem = pendingAgainst(chord, draft) ? bindingProblem(keyPath, draft) : null
 
   function applyChord(next: string): void {
     setDraft(next)
+    if (!pendingAgainst(chord, next)) return
     if (bindingProblem(keyPath, next) !== null) return
     if (next.trim() === '') resetKey(keyPath)
     else setKey(keyPath, next.trim())
@@ -438,6 +460,8 @@ function DraftField({
   const [draft, setDraft] = useDraft(current)
 
   function commit(next: string): void {
+    // Leaving a field alone is not an edit — see `pendingAgainst`.
+    if (!pendingAgainst(current, next)) return
     if (next.trim() === '') resetKey(path)
     else setKey(path, parse(next))
   }

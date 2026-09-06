@@ -135,7 +135,22 @@ export function KeyChordInput({
   const prefix = hasPrefix(value)
 
   return (
-    <span ref={groupRef} className="flex min-w-0 flex-1 items-center gap-2">
+    <span
+      ref={groupRef}
+      // Leaving settles the value, and *leaving* means the whole control: the
+      // handler sits on the group rather than on the text field so a blur from
+      // the toggle or the record button counts too, and the containment check
+      // lets focus move between them without settling anything. Inside the
+      // popover that matters twice over, because a commit closes the very thing
+      // being tabbed through.
+      onBlur={(event) => {
+        if (onCommit === undefined) return
+        const next = event.relatedTarget
+        if (next instanceof Node && groupRef.current?.contains(next) === true) return
+        onCommit(value)
+      }}
+      className="flex min-w-0 flex-1 items-center gap-2"
+    >
       <button
         type="button"
         aria-label={`record ${name}`}
@@ -165,16 +180,6 @@ export function KeyChordInput({
           if (event.key !== 'Enter' || onCommit === undefined) return
           event.preventDefault()
           onCommit(event.currentTarget.value)
-        }}
-        // Leaving the field settles it, but only when focus leaves the whole
-        // control: tabbing on to the `prefix+` toggle is still working on the
-        // same value, and in the popover a commit closes the thing being tabbed
-        // through.
-        onBlur={(event) => {
-          if (onCommit === undefined) return
-          const next = event.relatedTarget
-          if (next instanceof Node && groupRef.current?.contains(next) === true) return
-          onCommit(event.target.value)
         }}
         className={FIELD}
       />

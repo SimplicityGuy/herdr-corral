@@ -147,6 +147,13 @@ test('a chord typed and left behind is still written', async ({ page }) => {
   await page.goto('/')
   await page.keyboard.press('4')
 
+  // Browsing rows is not editing them: a binding on its schema default is unset,
+  // and settling it must not write a pure-default line into the file.
+  await page.getByRole('textbox', { name: 'keys.zoom' }).click()
+  await page.getByRole('textbox', { name: 'keys.split_vertical' }).click()
+  await page.getByRole('button', { name: 'reset keys.settings' }).click()
+  await expect(page.getByText('0 keys changed')).toBeVisible()
+
   const field = page.getByRole('textbox', { name: 'keys.help' })
   await field.fill('prefix+f1')
   // No enter: the user types and clicks elsewhere, which is where the value

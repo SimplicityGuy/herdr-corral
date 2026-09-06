@@ -538,6 +538,17 @@ describe('apply', () => {
     expect(store().effective('keys.command[0].command')).toBe('gitui')
   })
 
+  it('counts a documented default written onto an unset key as a change', () => {
+    // Invariant 2, and the reason a field cannot delegate "did this change?" to
+    // the store: an untouched setting is *unset*, so writing its own default is
+    // the difference between "herdr decides" and "I decided, and I decided this".
+    expect(store().effective('keys.zoom')).toBe('prefix+z')
+    store().apply([{ kind: 'set', path: 'keys.zoom', value: 'prefix+z' }])
+
+    expect(store().changedLeaves()).toEqual(['keys.zoom'])
+    expect(store().exportText()).toContain('zoom = "prefix+z"')
+  })
+
   it('is nothing at all when no op changes anything', () => {
     store().loadText(fixture)
     store().apply([{ kind: 'set', path: 'theme.name', value: 'catppuccin' }])

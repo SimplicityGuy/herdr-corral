@@ -85,6 +85,40 @@ describe('KeysEditor', () => {
     expect(useConfigStore.getState().isDirty()).toBe(false)
   })
 
+  it('writes nothing for a row that was only focused and left', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+    const before = exported()
+
+    // Browsing rows moves focus out of one field group after another, and every
+    // one of those is a settle. None of them is an edit: a binding on its schema
+    // default is unset, and writing that value back would put a pure-default
+    // line in a file whose header promises only what differs from the defaults.
+    for (const path of ['keys.zoom', 'keys.split_vertical', 'keys.close_pane']) {
+      await user.click(screen.getByRole('textbox', { name: path }))
+    }
+    await user.click(screen.getByRole('button', { name: 'reset keys.help' }))
+
+    expect(useConfigStore.getState().changedLeaves()).toEqual([])
+    expect(useConfigStore.getState().isDirty()).toBe(false)
+    expect(exported()).toBe(before)
+  })
+
+  it('writes a chord left behind on the way to the prefix+ toggle', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+
+    const field = screen.getByRole('textbox', { name: 'keys.zoom' })
+    await user.clear(field)
+    await user.type(field, 'prefix+f')
+    // Tab lands on the toggle, which is inside the control and settles nothing;
+    // the click after it leaves the control for good.
+    await user.tab()
+    await user.click(screen.getByRole('button', { name: 'reset keys.help' }))
+
+    expect(useConfigStore.getState().effective('keys.zoom')).toBe('prefix+f')
+  })
+
   it('writes through when the prefix+ toggle is ticked', async () => {
     const user = userEvent.setup()
     render(<KeysEditor />)
