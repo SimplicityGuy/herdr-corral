@@ -159,7 +159,7 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
 | `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts` (single and grouped writes), `download.ts` (file / clipboard / install snippet), `diff.ts` (the unified diff the export dialog draws), `capture.ts` (keydown → chord), `keybindings.ts`, `scalar-fields.ts` (which keys `Field` owns — not `keys.*`, not the `theme` table or `ui.accent`, not the structured types) |
 | `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount |
-| `e2e/` | Playwright specs, run against `dist/` |
+| `e2e/` | Playwright specs, run against `dist/`. One file per area — `shell`, `import-export`, `forms`, `keys`, `rows`, `status-bar`, `theme`, `square-corners` — plus `journeys.spec.ts`, the import → edit → download stories, and `console.ts`, the shared helpers |
 | `scripts/` | `gen-reference.ts`, its parser and fixture, other build-time generators, and `no-network.test.ts` — the sweep of `src/` that holds ADR-0001's "no network calls at runtime" to its word |
 
 `src/App.tsx` assembles the Console chrome behind one branch: `Landing` owns the screen until a
@@ -302,6 +302,15 @@ build rather than shipping.
 - Playwright runs against `dist/`, not the dev server, so e2e exercises the shipped bundle.
   Its specs compile under `tsconfig.e2e.json`, which is the only project with both the Node and
   DOM libraries, because `page.evaluate` callbacks run in the browser.
+- **Claims about the exported file are made about bytes.** `e2e/journeys.spec.ts` owns them:
+  it opens `src/test/fixture-user-config.toml` through the file chooser, drives the editors,
+  and compares what the browser downloads (`downloadConfig`, `diffLines` in `e2e/console.ts`)
+  against the fixture. Reading the export dialog's textarea proves nothing — the dialog and the
+  editor read the same store, so they agree whatever the patcher did. An area spec asserts what
+  its editor does on screen; an assertion that is really about the file belongs in the journey.
+- A spec that needs a control focused reaches it with `tabTo` (`e2e/console.ts`), which walks
+  the tab order. `.focus()` proves the control exists, not that ADR-0002's keyboard route to it
+  does.
 - Tailwind scans comments too. A bare utility name in prose emits that utility into the bundle,
   so write `rounded-*` rather than the bare word when describing one.
 

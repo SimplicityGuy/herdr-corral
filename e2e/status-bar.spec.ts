@@ -1,17 +1,16 @@
 import { expect, test } from '@playwright/test'
-import { addedSettings, openConsole } from './console.ts'
+import { addedSettings, openConsole, openPreview } from './console.ts'
 
 /**
  * Section `[3] status`, walked in a browser.
  *
- * The component tests already prove the editor agrees with the preview; what
- * only a browser can show is that a real `alt`+arrow on a real drag handle
- * reorders the list, and that the file at the end of it is the one herdr would
- * read. So each test drives the controls and then reads the diff behind
- * `:diff`.
+ * Reordering an entry from the keyboard is walked over the fixture in
+ * `journeys.spec.ts`, where it is settled against the bytes. What is here is how
+ * the list is built in the first place, and the rule that editing the tab bar
+ * from the mock leaves the mock on screen.
  */
 
-test('section [3] builds the tab bar entries, and the keyboard reorders them', async ({ page }) => {
+test('section [3] builds the tab bar entries from the picker', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
 
@@ -30,19 +29,14 @@ test('section [3] builds the tab bar entries, and the keyboard reorders them', a
   await picker.selectOption('datetime')
   await add.click()
 
+  // A `datetime` entry brings its own format field with it, which a `zoom` has
+  // no equivalent of — the picker is choosing a shape, not just a label.
   await expect(page.getByLabel('ui.tab_bar_right[1].format')).toBeVisible()
+  await expect(page.getByLabel('ui.tab_bar_right[0].format')).toHaveCount(0)
+
+  // One key changed, whatever the entry count: the whole list is the value.
   expect(await addedSettings(page)).toEqual([
     'tab_bar_right = [{ type = "zoom" }, { type = "datetime" }]',
-  ])
-
-  // Reordered from the keyboard alone: focus the handle, hold alt, press up.
-  await page.getByRole('button', { name: 'drag ui.tab_bar_right[1]' }).focus()
-  await page.keyboard.press('Alt+ArrowUp')
-  await expect(page.getByRole('button', { name: 'drag ui.tab_bar_right[0]' })).toBeFocused()
-
-  // Still one changed line, and the order in it is the order on screen.
-  expect(await addedSettings(page)).toEqual([
-    'tab_bar_right = [{ type = "datetime" }, { type = "zoom" }]',
   ])
   await expect(page.getByText('1 key changed')).toBeVisible()
 })
@@ -59,7 +53,7 @@ test('the preview’s tab bar edits itself, in place, under the popover', async 
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
   // `sidebar` is the switch that opens on the mock; every other one has a panel.
-  await page.keyboard.press('2')
+  await openPreview(page)
 
   const preview = page.getByRole('region', { name: /^preview/ })
   const entries = preview.getByRole('button', { name: 'tab bar status entries' })
@@ -90,7 +84,7 @@ test('the preview’s tab bar edits itself, in place, under the popover', async 
 test('the status switch still opens the section panel', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
-  await page.keyboard.press('2')
+  await openPreview(page)
 
   await page.getByRole('button', { name: 'tab bar status entries' }).click()
   await page.keyboard.press('Escape')
