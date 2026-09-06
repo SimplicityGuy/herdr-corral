@@ -11,9 +11,11 @@
  * - `edits` — what the user changed since, as `path → value` or `path → REMOVED`.
  *
  * Reading a setting walks those in order and falls through to the schema:
- * **edits ⊕ parsed ⊕ schema default**. No merged config is precomputed; what is cached is
- * the export diff, keyed on the identity of the edit map that produced it, so the shell
- * can read `isDirty` on every render without rebuilding a 167-key comparison.
+ * **edits ⊕ parsed ⊕ schema default**. Reading one path walks them directly; the whole
+ * merged config is built only when something asks for it, by `effectiveValues`, which is
+ * what a validator wants. Both that and the export diff are cached on the identity of the
+ * edit map that produced them, so the shell can read `isDirty` on every render without
+ * rebuilding a 167-key comparison.
  *
  * Undo and redo are stacks of whole `edits` maps. Each `set` copies the map once, and
  * every stack entry after that is a pointer to a map that already exists — the sharing is
@@ -31,17 +33,27 @@ import {
   type ConfigValues,
   type ExportOp,
   UnwritablePathError,
+  containerKeyPaths,
   diff,
   generate,
   isLeaf,
+  isContainerKey,
   isTableArrayValue,
   isUnder,
   isWholeValueKey,
+  leaves,
   patch,
   valuesEqual,
 } from '@/model/export'
 import { type TomlSyntaxError, type TomlValue, tryParseToml } from '@/model/parse'
-import { type PathSegment, normalizePath, parsePath } from '@/model/paths'
+import {
+  type PathSegment,
+  childPath,
+  formatPath,
+  indexedPath,
+  normalizePath,
+  parsePath,
+} from '@/model/paths'
 import { defaultOf, sections } from '@/schema/index.ts'
 import { create } from 'zustand'
 
@@ -110,6 +122,8 @@ export interface ConfigActions {
   effective(path: string): TomlValue | undefined
   /** Every path this config sets, defaults excluded. Shared, so read-only. */
   explicit(): ConfigValues
+  /** The whole config herdr would see, defaults included — what `validate()` wants. */
+  effectiveAll(): ConfigValues
   /** The leaves whose value differs from the loaded file's. */
   changedLeaves(): readonly string[]
   isDirty(): boolean
@@ -207,8 +221,19 @@ export function effectiveValue(doc: ConfigDocument, path: string): TomlValue | u
       return valueAt(ancestor.edit, rest)
     }
   }
+  // A table of user-chosen keys has no value of its own in the file — `flattenTree` walks
+  // into it and reports the agent ids inside. Assembling it is the whole map's job.
+  if (isContainerKey(target)) return effectiveValues(doc).get(target)
   const parsed = doc.parsed.get(target)
-  return parsed === undefined ? schemaDefault(target) : parsed
+  if (parsed === undefined) return schemaDefault(target)
+  // `keys.command` is the file's own array, and the editors change its fields one path at
+  // a time, so once anything is edited the array the file parsed to is behind. Only a
+  // container can go stale this way: a key the schema calls one whole value is edited
+  // whole, and that edit was caught above.
+  if (doc.edits.size > 0 && isTableArrayValue(parsed) && !isWholeValueKey(target)) {
+    return effectiveValues(doc).get(target)
+  }
+  return parsed
 }
 
 /**
@@ -294,6 +319,192 @@ export function exportText(doc: ConfigDocument): string {
  */
 export function explicitOf(doc: ConfigDocument): ConfigValues {
   return derive(doc).explicit
+}
+
+/** Write `value` at `segments` inside `target`, creating the tables on the way. */
+function assignInto(
+  target: Record<string, TomlValue>,
+  segments: readonly PathSegment[],
+  value: TomlValue,
+): void {
+  let node = target
+  for (const [position, segment] of segments.entries()) {
+    if (segment.kind !== 'key') return
+    if (position === segments.length - 1) {
+      node[segment.key] = value
+      return
+    }
+    const next = node[segment.key]
+    if (typeof next === 'object' && next !== null && !Array.isArray(next) && !(next instanceof Date)) {
+      node = next as Record<string, TomlValue>
+      continue
+    }
+    const created: Record<string, TomlValue> = {}
+    node[segment.key] = created
+    node = created
+  }
+}
+
+/**
+ * Assemble `keys.command[i].<field>` leaves back into the array they describe.
+ *
+ * The per-field paths are what the editors write and what the exporter patches, so they
+ * are the truth; the array is derived from them and never read from the file, which is
+ * what keeps the two consistent after an edit, an append or a reset. A gap in the indices
+ * becomes an empty entry rather than being closed up, so `keys.command[i]` still names
+ * element `i` of the array.
+ */
+/** The array-of-tables occurrences the loaded file held, per base path. */
+function occurrencesIn(parsed: ConfigValues): Map<string, Set<number>> {
+  const found = new Map<string, Set<number>>()
+  for (const path of parsed.keys()) {
+    const segments = parsePath(path)
+    const at = segments.findIndex((segment) => segment.kind === 'index')
+    const owner = at === -1 ? undefined : segments[at]
+    if (owner === undefined || owner.kind !== 'index') continue
+    const base = formatPath(segments.slice(0, at))
+    const bucket = found.get(base)
+    if (bucket === undefined) found.set(base, new Set([owner.index]))
+    else bucket.add(owner.index)
+  }
+  return found
+}
+
+function groupIndexedEntries(out: Map<string, TomlValue>, fileOccurrences: Map<string, Set<number>>): void {
+  const groups = new Map<string, Map<number, Record<string, TomlValue>>>()
+  for (const [path, value] of out) {
+    const segments = parsePath(path)
+    const at = segments.findIndex((segment) => segment.kind === 'index')
+    const owner = at === -1 ? undefined : segments[at]
+    if (owner === undefined || owner.kind !== 'index') continue
+    const rest = segments.slice(at + 1)
+    // A nested array of tables would need a second index to place the value. herdr has
+    // none, and guessing would be worse than leaving the outer array underived.
+    if (rest.length === 0 || rest.some((segment) => segment.kind === 'index')) continue
+    const base = formatPath(segments.slice(0, at))
+    let entries = groups.get(base)
+    if (entries === undefined) {
+      entries = new Map()
+      groups.set(base, entries)
+    }
+    let entry = entries.get(owner.index)
+    if (entry === undefined) {
+      entry = {}
+      entries.set(owner.index, entry)
+    }
+    assignInto(entry, rest, value)
+  }
+  for (const [base, entries] of groups) {
+    // Resetting every field of one command does not delete its `[[keys.command]]` block,
+    // so the slot survives in the file and has to survive here, as an empty entry.
+    for (const index of fileOccurrences.get(base) ?? []) {
+      if (!entries.has(index)) entries.set(index, {})
+    }
+    const highest = Math.max(...entries.keys())
+    const array: TomlValue[] = []
+    for (let index = 0; index <= highest; index++) array.push(entries.get(index) ?? {})
+    out.set(base, array)
+  }
+}
+
+/** Assemble the agent ids under a container key back into the table that holds them. */
+function buildContainerTables(out: Map<string, TomlValue>): void {
+  for (const base of containerKeyPaths()) {
+    const depth = parsePath(base).length
+    const table: Record<string, TomlValue> = {}
+    for (const [path, value] of out) {
+      if (!isUnder(path, base)) continue
+      const rest = parsePath(path).slice(depth)
+      const only = rest.length === 1 ? rest[0] : undefined
+      if (only === undefined || only.kind !== 'key') continue
+      table[only.key] = value
+    }
+    out.set(base, table)
+  }
+}
+
+/** Emit the leaves of one table, the way `flattenTree` would have read them back. */
+function emitTable(
+  out: Map<string, TomlValue>,
+  prefix: string,
+  table: Record<string, TomlValue>,
+): void {
+  for (const [key, value] of Object.entries(table)) {
+    const path = childPath(prefix, key)
+    if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      emitTable(out, path, value as Record<string, TomlValue>)
+      continue
+    }
+    out.set(path, value)
+    if (!isTableArrayValue(value)) continue
+    for (const [index, element] of (value as TomlValue[]).entries()) {
+      emitTable(out, indexedPath(path, index), element as Record<string, TomlValue>)
+    }
+  }
+}
+
+/**
+ * Expand every array of tables into the indexed paths a parse of the file would give.
+ *
+ * `ui.tab_bar_right` is written and edited whole, so its entries have no leaf of their
+ * own; a reader asking for `ui.tab_bar_right[0].type` gets it from here.
+ */
+function expandTableArrays(out: Map<string, TomlValue>): void {
+  for (const [path, value] of [...out]) {
+    if (!isTableArrayValue(value)) continue
+    for (const [index, element] of (value as TomlValue[]).entries()) {
+      emitTable(out, indexedPath(path, index), element as Record<string, TomlValue>)
+    }
+  }
+}
+
+function buildEffective(doc: ConfigDocument): ConfigValues {
+  const explicit = explicitOf(doc)
+  const out = new Map<string, TomlValue>()
+  for (const path of leaves(doc.parsed, explicit)) {
+    const set = explicit.get(path)
+    const value = set === undefined ? schemaDefault(path) : set
+    if (value !== undefined) out.set(path, value)
+  }
+  groupIndexedEntries(out, occurrencesIn(doc.parsed))
+  buildContainerTables(out)
+  expandTableArrays(out)
+  return out
+}
+
+const effectiveCache = new WeakMap<Edits, { parsed: ConfigValues; values: ConfigValues }>()
+
+/**
+ * The whole config herdr would see, as one flat `path → value` map.
+ *
+ * This is the argument `validate()` wants. It is built from the leaves outward: each
+ * writable path takes its value from the edits, then the file, then the schema's
+ * documented default, and every container is then derived from those leaves rather than
+ * read from the file. That is what keeps `keys.command` and its `keys.command[i].field`
+ * entries telling the same story after a per-field edit, an append or a reset, and what
+ * makes a path inside a replaced value — `ui.tab_bar_right[0].type` — read through the
+ * replacement instead of returning what the file used to say.
+ *
+ * The shape matches `flattenTree`, with one addition: the container key
+ * `ui.sidebar.agents.rows_by_agent` is present as a table alongside the `<id>` entries
+ * inside it, because a validator wants to see the table as a whole. A key herdr documents
+ * as unset and nobody set is absent rather than null, and `keys.command` is absent when
+ * there are no commands, which is what a parse of such a file gives.
+ *
+ * The other two arguments a validator needs come from elsewhere on purpose. The user-set
+ * paths are the keys of `explicit()`. The unknown keys should come from `unknownKeysIn`
+ * in the validation layer, which owns what "unknown" means — a second definition here
+ * would be the drift that helper exists to prevent.
+ *
+ * Memoized on the identity of the edit map that produced it, guarded on the parsed map,
+ * so repeated reads are the same reference and an undo is a cache hit.
+ */
+export function effectiveValues(doc: ConfigDocument): ConfigValues {
+  const cached = effectiveCache.get(doc.edits)
+  if (cached !== undefined && cached.parsed === doc.parsed) return cached.values
+  const values = buildEffective(doc)
+  effectiveCache.set(doc.edits, { parsed: doc.parsed, values })
+  return values
 }
 
 /**
@@ -406,6 +617,10 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
 
   explicit() {
     return explicitOf(get())
+  },
+
+  effectiveAll() {
+    return effectiveValues(get())
   },
 
   changedLeaves() {

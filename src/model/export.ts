@@ -211,6 +211,21 @@ export function isWholeValueKey(path: string): boolean {
   return wholeValueKeys.has(normalizePath(path))
 }
 
+/**
+ * The schema keys that name a table of user-chosen keys rather than a value.
+ *
+ * `ui.sidebar.agents.rows_by_agent` is the only one: its leaves are the agent ids inside
+ * it. A reader that wants the table itself has to assemble it from those.
+ */
+export function containerKeyPaths(): readonly string[] {
+  return [...containerKeys]
+}
+
+/** True when the schema calls `path` a table of user-chosen keys. */
+export function isContainerKey(path: string): boolean {
+  return containerKeys.has(normalizePath(path))
+}
+
 /** Deep equality for TOML values: arrays by element, tables by key, dates by instant. */
 export function valuesEqual(a: TomlValue, b: TomlValue): boolean {
   if (a === b) return true

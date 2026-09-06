@@ -397,3 +397,119 @@ describe('selection', () => {
     expect(store().selection).toEqual({ section: 'ref-theme' })
   })
 })
+
+describe('the whole effective config', () => {
+  it('is herdr defaults alone when nothing has been loaded', () => {
+    const values = store().effectiveAll()
+    expect(values.get('ui.sidebar_width')).toBe(26)
+    expect(values.get('theme.name')).toBe('catppuccin')
+    expect(values.get('ui.tab_bar_right')).toEqual([])
+    expect(values.get('ui.sidebar.agents.rows_by_agent')).toEqual({})
+    // herdr documents these as unset, and TOML has no null to stand in for one.
+    expect(values.has('theme.dark_name')).toBe(false)
+    expect(values.has('ui.sound.path')).toBe(false)
+    // No custom commands, exactly as a parse of such a file would report.
+    expect(values.has('keys.command')).toBe(false)
+  })
+
+  it('layers the file over the defaults', () => {
+    store().loadText(fixture)
+    const values = store().effectiveAll()
+    expect(values.get('terminal.default_shell')).toBe('/opt/homebrew/bin/fish')
+    expect(values.get('ui.sidebar_min_width')).toBe(18)
+    expect(values.get('theme.custom.panel_bg')).toBe('reset')
+  })
+
+  it('layers edits over the file', () => {
+    store().loadText(fixture)
+    store().set('ui.sidebar_width', 30)
+    store().reset('terminal.default_shell')
+    const values = store().effectiveAll()
+    expect(values.get('ui.sidebar_width')).toBe(30)
+    expect(values.get('terminal.default_shell')).toBe('')
+  })
+
+  it('carries the five whole values a validator reads', () => {
+    store().loadText(fixture)
+    const values = store().effectiveAll()
+    expect(values.get('ui.sidebar.spaces.rows')).toEqual([
+      ['state_icon', 'workspace'],
+      ['branch', 'git_status'],
+    ])
+    expect(values.get('ui.sidebar.agents.rows_by_agent.claude')).toHaveLength(3)
+    expect(values.get('ui.sidebar.agents.rows_by_agent')).toEqual({
+      claude: [['state_icon', 'workspace', 'tab'], ['terminal_title_stripped'], ['agent']],
+    })
+    expect(values.get('ui.tab_bar_right')).toEqual([
+      { type: 'zoom' },
+      { type: 'hostname' },
+      { type: 'datetime', format: '%H:%M' },
+    ])
+    expect(values.get('keys.command')).toEqual([
+      { key: 'prefix+alt+g', type: 'popup', command: 'lazygit', width: '80%', height: '80%' },
+      { key: 'prefix+alt+t', type: 'pane', command: 'btop' },
+    ])
+  })
+
+  it('rebuilds the command list after a per-field edit', () => {
+    store().loadText(fixture)
+    store().set('keys.command[1].command', 'htop')
+    const values = store().effectiveAll()
+    expect(values.get('keys.command[1].command')).toBe('htop')
+    expect(values.get('keys.command')).toEqual([
+      { key: 'prefix+alt+g', type: 'popup', command: 'lazygit', width: '80%', height: '80%' },
+      { key: 'prefix+alt+t', type: 'pane', command: 'htop' },
+    ])
+  })
+
+  it('rebuilds the command list after an append', () => {
+    store().loadText(fixture)
+    store().set('keys.command[2].key', 'prefix+alt+d')
+    store().set('keys.command[2].command', 'dust')
+    const values = store().effectiveAll()
+    expect(values.get('keys.command')).toHaveLength(3)
+    expect(values.get('keys.command[2].command')).toBe('dust')
+  })
+
+  it('leaves an empty entry where a reset emptied one', () => {
+    store().loadText(fixture)
+    for (const field of ['key', 'type', 'command']) {
+      store().reset(`keys.command[1].${field}`)
+    }
+    const values = store().effectiveAll()
+    expect(values.get('keys.command')).toEqual([
+      { key: 'prefix+alt+g', type: 'popup', command: 'lazygit', width: '80%', height: '80%' },
+      {},
+    ])
+  })
+
+  it('expands a replaced whole value into the paths inside it', () => {
+    store().loadText(fixture)
+    store().set('ui.tab_bar_right', [{ type: 'datetime', format: '%H:%M' }])
+    const values = store().effectiveAll()
+    expect(values.get('ui.tab_bar_right[0].type')).toBe('datetime')
+    expect(values.get('ui.tab_bar_right[0].format')).toBe('%H:%M')
+    expect(values.has('ui.tab_bar_right[1].type')).toBe(false)
+  })
+
+  it('agrees with the per-path reader', () => {
+    store().loadText(fixture)
+    store().set('ui.sidebar_width', 30)
+    store().set('keys.command[0].command', 'gitui')
+    const values = store().effectiveAll()
+    for (const path of values.keys()) {
+      expect([path, store().effective(path)]).toEqual([path, values.get(path)])
+    }
+  })
+
+  it('hands back the same map until the edits change', () => {
+    store().loadText(fixture)
+    const values = store().effectiveAll()
+    store().select({ region: 'sidebar' })
+    expect(store().effectiveAll()).toBe(values)
+    store().set('ui.sidebar_width', 30)
+    expect(store().effectiveAll()).not.toBe(values)
+    store().undo()
+    expect(store().effectiveAll()).toBe(values)
+  })
+})
