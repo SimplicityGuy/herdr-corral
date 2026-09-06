@@ -11,8 +11,9 @@
  * - `edits` — what the user changed since, as `path → value` or `path → REMOVED`.
  *
  * Reading a setting walks those in order and falls through to the schema:
- * **edits ⊕ parsed ⊕ schema default**. Nothing precomputes a merged config, because the
- * merge is cheap and a cached copy is one more thing to keep honest.
+ * **edits ⊕ parsed ⊕ schema default**. No merged config is precomputed; what is cached is
+ * the export diff, keyed on the identity of the edit map that produced it, so the shell
+ * can read `isDirty` on every render without rebuilding a 167-key comparison.
  *
  * Undo and redo are stacks of whole `edits` maps. A map is never mutated, so a stack
  * entry is a pointer to the map that was current at the time — structural sharing, not a
@@ -26,13 +27,17 @@
 
 import {
   type ConfigValues,
+  type ExportOp,
+  UnwritablePathError,
   diff,
   generate,
+  isLeaf,
+  isUnder,
   patch,
   valuesEqual,
 } from '@/model/export'
 import { type TomlSyntaxError, type TomlValue, tryParseToml } from '@/model/parse'
-import { normalizePath } from '@/model/paths'
+import { type PathSegment, normalizePath, parsePath } from '@/model/paths'
 import { defaultOf, sections } from '@/schema/index.ts'
 import { create } from 'zustand'
 
@@ -87,6 +92,7 @@ export interface ConfigActions {
   loadText(text: string): TomlSyntaxError | null
   /** Start over from herdr's defaults: no original text, no set keys. */
   loadDefaults(): void
+  /** Write one setting. Throws `UnwritablePathError` when the path names a table. */
   set(path: string, value: TomlValue): void
   /** Take a path back out: removed when the file set it, otherwise just un-edited. */
   reset(path: string): void
@@ -98,10 +104,10 @@ export interface ConfigActions {
   setSection(section: string): void
   /** edits ⊕ parsed ⊕ schema default. `undefined` when nothing gives the path a value. */
   effective(path: string): TomlValue | undefined
-  /** Every path this config sets, defaults excluded. */
-  explicit(): Map<string, TomlValue>
+  /** Every path this config sets, defaults excluded. Shared, so read-only. */
+  explicit(): ConfigValues
   /** The leaves whose value differs from the loaded file's. */
-  changedLeaves(): string[]
+  changedLeaves(): readonly string[]
   isDirty(): boolean
   /** The file to hand the user: a patch of the original, or a freshly written one. */
   exportText(): string
@@ -124,11 +130,69 @@ function schemaDefault(path: string): TomlValue | undefined {
   return value === null || value === undefined ? undefined : (value as TomlValue)
 }
 
+/**
+ * The edit that owns `target` from above, and the path left to walk inside its value.
+ *
+ * `ui.tab_bar_right` is written as one value, so once it is edited the entries inside it
+ * live in that value and the `ui.tab_bar_right[0].type` the file parsed to is stale. The
+ * edits map is a handful of entries, so scanning it beats parsing the path.
+ */
+function editedAncestor(doc: ConfigDocument, target: string): { path: string; edit: Edit } | null {
+  let found: { path: string; edit: Edit } | null = null
+  for (const [path, edit] of doc.edits) {
+    if (!isUnder(target, path)) continue
+    if (found === null || path.length > found.path.length) found = { path, edit }
+  }
+  return found
+}
+
+/** Walk `segments` into `value`, or `undefined` when the value has nothing there. */
+function valueAt(value: TomlValue, segments: readonly PathSegment[]): TomlValue | undefined {
+  let current: TomlValue | undefined = value
+  for (const segment of segments) {
+    if (current === null || current === undefined) return undefined
+    if (segment.kind === 'index') {
+      current = Array.isArray(current) ? current[segment.index] : undefined
+      continue
+    }
+    if (typeof current !== 'object' || Array.isArray(current) || current instanceof Date) {
+      return undefined
+    }
+    current = (current as Record<string, TomlValue>)[segment.key]
+  }
+  return current
+}
+
+/**
+ * The normalized path of a setting an edit may address, or a throw explaining why not.
+ *
+ * A table is not a setting. `keys.command` names a list of `[[keys.command]]` blocks and
+ * `theme.custom` names a table of colour tokens; neither can be written as one
+ * `key = value` line, so an edit at either would be dropped on the way out. Rejecting the
+ * write is the only honest answer — the editors address the fields inside instead, which
+ * is what `TomlDocument` can actually patch in place.
+ */
+function writablePath(doc: ConfigDocument, path: string): string {
+  const target = normalizePath(path)
+  if (isLeaf(target, doc.parsed, doc.edits)) return target
+  throw new UnwritablePathError(
+    `${target} names a table, not a setting; edit the keys inside it instead`,
+  )
+}
+
 /** edits ⊕ parsed ⊕ schema default, for one path. */
 export function effectiveValue(doc: ConfigDocument, path: string): TomlValue | undefined {
   const target = normalizePath(path)
   const edit = doc.edits.get(target)
   if (edit !== undefined) return edit === REMOVED ? schemaDefault(target) : edit
+  if (doc.edits.size > 0) {
+    const ancestor = editedAncestor(doc, target)
+    if (ancestor !== null) {
+      if (ancestor.edit === REMOVED) return schemaDefault(target)
+      const rest = parsePath(target).slice(parsePath(ancestor.path).length)
+      return valueAt(ancestor.edit, rest)
+    }
+  }
   const parsed = doc.parsed.get(target)
   return parsed === undefined ? schemaDefault(target) : parsed
 }
@@ -137,25 +201,63 @@ export function effectiveValue(doc: ConfigDocument, path: string): TomlValue | u
  * Every path the config sets, with the edits applied.
  *
  * Schema defaults are deliberately absent: this is the map an export diffs, and a key
- * nobody touched must not be written into the file.
+ * nobody touched must not be written into the file. Editing a value that has structure
+ * inside it drops the paths the file parsed to underneath it, so no reader can be handed
+ * an entry from the array that used to be there.
  */
-export function explicitValues(doc: ConfigDocument): Map<string, TomlValue> {
+export function explicitValues(doc: ConfigDocument): ConfigValues {
   const out = new Map<string, TomlValue>(doc.parsed)
   for (const [path, edit] of doc.edits) {
+    for (const existing of out.keys()) {
+      if (isUnder(existing, path)) out.delete(existing)
+    }
     if (edit === REMOVED) out.delete(path)
     else out.set(path, edit)
   }
   return out
 }
 
+/**
+ * The explicit map and the ops an export would apply, computed once per edit map.
+ *
+ * The shell reads `isDirty` and `changedLeaves` as zustand selectors, which run on every
+ * touch of the store; recomputing a 167-key diff and handing back a fresh array each time
+ * would re-render the whole chrome on an unrelated selection change. Edit maps are never
+ * mutated and are shared with the undo stacks, so their identity is a sound cache key —
+ * and stepping back through history hits the cache rather than rebuilding.
+ */
+interface Derived {
+  readonly parsed: ConfigValues
+  readonly explicit: ConfigValues
+  readonly ops: readonly ExportOp[]
+  readonly changed: readonly string[]
+}
+
+const derivedCache = new WeakMap<Edits, Derived>()
+
+function derive(doc: ConfigDocument): Derived {
+  const cached = derivedCache.get(doc.edits)
+  if (cached !== undefined && cached.parsed === doc.parsed) return cached
+  const explicit = explicitValues(doc)
+  const ops = diff(doc.parsed, explicit)
+  const fresh: Derived = {
+    parsed: doc.parsed,
+    explicit,
+    ops,
+    changed: ops.map((op) => op.path),
+  }
+  derivedCache.set(doc.edits, fresh)
+  return fresh
+}
+
 /** The leaves an export would write or drop, in schema order. */
-export function changedLeaves(doc: ConfigDocument): string[] {
-  return diff(doc.parsed, explicitValues(doc)).map((op) => op.path)
+export function changedLeaves(doc: ConfigDocument): readonly string[] {
+  return derive(doc).changed
 }
 
 /** True when an export would change anything. */
 export function isDirty(doc: ConfigDocument): boolean {
-  return diff(doc.parsed, explicitValues(doc)).length > 0
+  return derive(doc).ops.length > 0
 }
 
 /**
@@ -166,9 +268,18 @@ export function isDirty(doc: ConfigDocument): boolean {
  * a compact file written from the keys it set.
  */
 export function exportText(doc: ConfigDocument): string {
-  const explicit = explicitValues(doc)
-  if (doc.source === 'defaults') return generate(explicit)
-  return patch(doc.originalText, diff(doc.parsed, explicit))
+  const derived = derive(doc)
+  if (doc.source === 'defaults') return generate(derived.explicit)
+  return patch(doc.originalText, derived.ops)
+}
+
+/**
+ * The paths this config sets, edits applied — the same map an export diffs.
+ *
+ * Shared, so repeated reads are the same reference; read-only for the same reason.
+ */
+export function explicitOf(doc: ConfigDocument): ConfigValues {
+  return derive(doc).explicit
 }
 
 /** The state a fresh session starts from: herdr's defaults, nothing set, nothing done. */
@@ -209,8 +320,8 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
   },
 
   set(path, value) {
-    const target = normalizePath(path)
     const state = get()
+    const target = writablePath(state, path)
     const edit = state.edits.get(target)
     const settled = edit === undefined ? state.parsed.get(target) : edit === REMOVED ? undefined : edit
     // A key that is not set at all is never a no-op, even when the new value matches the
@@ -222,8 +333,8 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
   },
 
   reset(path) {
-    const target = normalizePath(path)
     const state = get()
+    const target = writablePath(state, path)
     const edit = state.edits.get(target)
     if (edit === REMOVED) return
     const inFile = state.parsed.has(target)
@@ -265,7 +376,7 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
   },
 
   explicit() {
-    return explicitValues(get())
+    return explicitOf(get())
   },
 
   changedLeaves() {

@@ -8,6 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
+import { UnwritablePathError } from '@/model/export'
 import { REMOVED, useConfigStore, resetConfigStore } from '@/store/config'
 import fixture from '@/test/fixture-user-config.toml?raw'
 
@@ -168,6 +169,120 @@ describe('reset', () => {
     const past = store().past
     store().reset('theme.name')
     expect(store().past).toBe(past)
+  })
+})
+
+describe('paths that are not settings', () => {
+  beforeEach(() => {
+    store().loadText(fixture)
+  })
+
+  it('refuses to set a list of table blocks', () => {
+    expect(() =>
+      store().set('keys.command', [{ key: 'x', type: 'pane', command: 'zsh' }]),
+    ).toThrow(UnwritablePathError)
+  })
+
+  it('refuses to set a table of keys', () => {
+    expect(() => store().set('theme.custom', { accent: '#ffffff' })).toThrow(
+      UnwritablePathError,
+    )
+    expect(() => store().set('ui.sidebar.agents.rows_by_agent', {})).toThrow(
+      UnwritablePathError,
+    )
+  })
+
+  it('refuses to reset one', () => {
+    expect(() => store().reset('keys.command')).toThrow(UnwritablePathError)
+  })
+
+  it('leaves the config untouched when it refuses', () => {
+    expect(() => store().set('keys.command', [])).toThrow(UnwritablePathError)
+    expect(store().edits.size).toBe(0)
+    expect(store().changedLeaves()).toEqual([])
+    expect(store().exportText()).toBe(fixture)
+  })
+
+  it('still takes the fields inside them', () => {
+    store().set('keys.command[0].command', 'gitui')
+    store().set('theme.custom.accent', '#ffffff')
+    store().set('ui.sidebar.agents.rows_by_agent.codex', [['agent']])
+    expect(store().changedLeaves()).toEqual([
+      'theme.custom.accent',
+      'keys.command[0].command',
+      'ui.sidebar.agents.rows_by_agent.codex',
+    ])
+  })
+})
+
+describe('values inside an edited value', () => {
+  beforeEach(() => {
+    store().loadText(fixture)
+  })
+
+  it('reads an entry of the array the file parsed to', () => {
+    expect(store().effective('ui.tab_bar_right[0].type')).toBe('zoom')
+  })
+
+  it('reads through the edit once the whole array is replaced', () => {
+    store().set('ui.tab_bar_right', [{ type: 'datetime', format: '%H:%M' }])
+    expect(store().effective('ui.tab_bar_right[0].type')).toBe('datetime')
+    expect(store().effective('ui.tab_bar_right[0].format')).toBe('%H:%M')
+  })
+
+  it('reports an entry the edit dropped as gone', () => {
+    store().set('ui.tab_bar_right', [{ type: 'zoom' }])
+    expect(store().effective('ui.tab_bar_right[1].type')).toBeUndefined()
+  })
+
+  it('reports every entry as gone once the key is reset', () => {
+    store().reset('ui.tab_bar_right')
+    expect(store().effective('ui.tab_bar_right[0].type')).toBeUndefined()
+  })
+
+  it('drops the stale entries from the explicit map', () => {
+    store().set('ui.tab_bar_right', [{ type: 'zoom' }])
+    expect(store().explicit().has('ui.tab_bar_right[0].type')).toBe(false)
+    expect(store().explicit().get('ui.tab_bar_right')).toEqual([{ type: 'zoom' }])
+  })
+
+  it('goes back to the file value on undo', () => {
+    store().set('ui.tab_bar_right', [{ type: 'datetime', format: '%H:%M' }])
+    store().undo()
+    expect(store().effective('ui.tab_bar_right[0].type')).toBe('zoom')
+  })
+})
+
+describe('derived values', () => {
+  beforeEach(() => {
+    store().loadText(fixture)
+  })
+
+  it('hands back the same result until the edits change', () => {
+    store().set('ui.sidebar_width', 30)
+    const changed = store().changedLeaves()
+    const explicit = store().explicit()
+    expect(store().changedLeaves()).toBe(changed)
+    expect(store().explicit()).toBe(explicit)
+    store().select({ key: 'ui.sidebar_width' })
+    expect(store().changedLeaves()).toBe(changed)
+    expect(store().explicit()).toBe(explicit)
+  })
+
+  it('hands back a new result once an edit lands', () => {
+    store().set('ui.sidebar_width', 30)
+    const changed = store().changedLeaves()
+    store().set('theme.name', 'nord')
+    expect(store().changedLeaves()).not.toBe(changed)
+    expect(store().changedLeaves()).toEqual(['theme.name', 'ui.sidebar_width'])
+  })
+
+  it('reuses what it already worked out when history steps back', () => {
+    store().set('ui.sidebar_width', 30)
+    const changed = store().changedLeaves()
+    store().set('theme.name', 'nord')
+    store().undo()
+    expect(store().changedLeaves()).toBe(changed)
   })
 })
 
