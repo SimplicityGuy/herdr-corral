@@ -513,3 +513,55 @@ describe('the whole effective config', () => {
     expect(store().effectiveAll()).toBe(values)
   })
 })
+
+describe('apply', () => {
+  it('makes several writes one undo step', () => {
+    store().apply([
+      { kind: 'set', path: 'keys.command[0].command', value: 'lazygit' },
+      { kind: 'set', path: 'keys.command[0].type', value: 'popup' },
+      { kind: 'set', path: 'ui.sidebar_width', value: 30 },
+    ])
+    expect(store().changedLeaves()).toHaveLength(3)
+
+    store().undo()
+
+    expect(store().isDirty()).toBe(false)
+    expect(store().past).toHaveLength(0)
+  })
+
+  it('takes removals and writes in the order it is given them', () => {
+    store().loadText(fixture)
+    store().apply([
+      { kind: 'remove', path: 'keys.command[0].command' },
+      { kind: 'set', path: 'keys.command[0].command', value: 'gitui' },
+    ])
+    expect(store().effective('keys.command[0].command')).toBe('gitui')
+  })
+
+  it('counts a documented default written onto an unset key as a change', () => {
+    // Invariant 2, and the reason a field cannot delegate "did this change?" to
+    // the store: an untouched setting is *unset*, so writing its own default is
+    // the difference between "herdr decides" and "I decided, and I decided this".
+    expect(store().effective('keys.zoom')).toBe('prefix+z')
+    store().apply([{ kind: 'set', path: 'keys.zoom', value: 'prefix+z' }])
+
+    expect(store().changedLeaves()).toEqual(['keys.zoom'])
+    expect(store().exportText()).toContain('zoom = "prefix+z"')
+  })
+
+  it('is nothing at all when no op changes anything', () => {
+    store().loadText(fixture)
+    store().apply([{ kind: 'set', path: 'theme.name', value: 'catppuccin' }])
+    expect(store().past).toHaveLength(0)
+  })
+
+  it('writes none of a batch that names a path it cannot write', () => {
+    expect(() =>
+      store().apply([
+        { kind: 'set', path: 'ui.sidebar_width', value: 30 },
+        { kind: 'set', path: 'theme.custom', value: { base: '#000000' } },
+      ]),
+    ).toThrow(UnwritablePathError)
+    expect(store().isDirty()).toBe(false)
+  })
+})

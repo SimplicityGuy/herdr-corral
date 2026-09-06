@@ -112,6 +112,8 @@ export interface ConfigActions {
   set(path: string, value: TomlValue): void
   /** Take a path back out: removed when the file set it, otherwise just un-edited. */
   reset(path: string): void
+  /** Apply several writes and removals as one undo step. */
+  apply(ops: readonly ExportOp[]): void
   undo(): void
   redo(): void
   /** Merge a partial selection over the current one. */
@@ -206,6 +208,37 @@ function writablePath(doc: ConfigDocument, path: string, value?: TomlValue): str
     )
   }
   return target
+}
+
+/**
+ * Apply one op to a working copy of the edit map. True when it changed anything.
+ *
+ * `set`, `reset` and `apply` are the same rule counted different numbers of
+ * times, so the rule lives here: an explicit value equal to the documented
+ * default is still an edit (invariant 2), a path the file set is *removed* while
+ * a path only this session set is simply forgotten, and writing a value a path
+ * already holds is nothing at all. Throwing on an unwritable path before the
+ * caller commits anything is what makes a batch all-or-nothing.
+ */
+function applyEdit(doc: ConfigDocument, edits: Map<string, Edit>, op: ExportOp): boolean {
+  if (op.kind === 'remove') {
+    const target = writablePath(doc, op.path)
+    const edit = edits.get(target)
+    if (edit === REMOVED) return false
+    const inFile = doc.parsed.has(target)
+    if (edit === undefined && !inFile) return false
+    if (inFile) edits.set(target, REMOVED)
+    else edits.delete(target)
+    return true
+  }
+  const target = writablePath(doc, op.path, op.value)
+  const edit = edits.get(target)
+  const settled = edit === undefined ? doc.parsed.get(target) : edit === REMOVED ? undefined : edit
+  // A key that is not set at all is never a no-op, even when the new value
+  // matches the documented default — invariant 2 says it is still written.
+  if (settled !== undefined && valuesEqual(settled, op.value)) return false
+  edits.set(target, op.value)
+  return true
 }
 
 /** edits ⊕ parsed ⊕ schema default, for one path. */
@@ -560,28 +593,28 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
   },
 
   set(path, value) {
-    const state = get()
-    const target = writablePath(state, path, value)
-    const edit = state.edits.get(target)
-    const settled = edit === undefined ? state.parsed.get(target) : edit === REMOVED ? undefined : edit
-    // A key that is not set at all is never a no-op, even when the new value matches the
-    // documented default — invariant 2 says an explicit default is still written.
-    if (settled !== undefined && valuesEqual(settled, value)) return
-    const edits = new Map(state.edits)
-    edits.set(target, value)
-    write({ edits, past: pushHistory(state.past, state.edits), future: [] })
+    get().apply([{ kind: 'set', path, value }])
   },
 
   reset(path) {
+    get().apply([{ kind: 'remove', path }])
+  },
+
+  /**
+   * One history entry for a change that is several writes.
+   *
+   * Removing a `[[keys.command]]` entry moves every entry after it down a slot,
+   * field by field, and a user who undoes that means the removal rather than one
+   * field of it. The ops are applied to a single copy of the edit map and pushed
+   * once, and an unwritable path throws before anything is written, so a batch
+   * either lands whole or not at all.
+   */
+  apply(ops) {
     const state = get()
-    const target = writablePath(state, path)
-    const edit = state.edits.get(target)
-    if (edit === REMOVED) return
-    const inFile = state.parsed.has(target)
-    if (edit === undefined && !inFile) return
     const edits = new Map(state.edits)
-    if (inFile) edits.set(target, REMOVED)
-    else edits.delete(target)
+    let changed = false
+    for (const op of ops) changed = applyEdit(state, edits, op) || changed
+    if (!changed) return
     write({ edits, past: pushHistory(state.past, state.edits), future: [] })
   },
 

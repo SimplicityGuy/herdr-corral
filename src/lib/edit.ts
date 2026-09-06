@@ -10,7 +10,7 @@
  * inside are where the change is made, and the editor that owns the structure says
  * so. Anything else still throws.
  */
-import { UnwritablePathError } from '@/model/export'
+import { type ExportOp, UnwritablePathError } from '@/model/export'
 import type { TomlValue } from '@/model/parse'
 import { useConfigStore } from '@/store/config'
 
@@ -27,6 +27,24 @@ export function resetKey(key: string): void {
 export function setKey(key: string, value: TomlValue): void {
   try {
     useConfigStore.getState().set(key, value)
+  } catch (error) {
+    if (!(error instanceof UnwritablePathError)) throw error
+  }
+}
+
+/**
+ * Write several settings as one undo step.
+ *
+ * A change that is several writes — removing one `[[keys.command]]` entry moves
+ * every entry after it down a slot — is one thing to the person who made it, so
+ * it is one thing to undo. The batch is all-or-nothing: a path that is not a
+ * setting takes the whole batch with it rather than leaving half of it applied,
+ * which for a caller building ops out of paths it already knows is a bug it
+ * would rather see as nothing happening than as a mangled array.
+ */
+export function applyEdits(ops: readonly ExportOp[]): void {
+  try {
+    useConfigStore.getState().apply(ops)
   } catch (error) {
     if (!(error instanceof UnwritablePathError)) throw error
   }

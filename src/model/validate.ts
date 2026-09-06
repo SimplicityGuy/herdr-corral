@@ -377,7 +377,7 @@ const CANONICAL_AGENT_IDS: readonly string[] = [
 ]
 
 /** Fields a `[[keys.command]]` table accepts (src/config/keybinds.rs:88-104). */
-const COMMAND_FIELDS: readonly string[] = [
+export const COMMAND_FIELDS: readonly string[] = [
   'key',
   'command',
   'type',
@@ -387,7 +387,7 @@ const COMMAND_FIELDS: readonly string[] = [
 ]
 
 /** Command execution modes (`CommandKeybindType`, src/config/keybinds.rs:78-86). */
-const COMMAND_TYPES: readonly string[] = ['shell', 'pane', 'popup', 'plugin_action']
+export const COMMAND_TYPES: readonly string[] = ['shell', 'pane', 'popup', 'plugin_action']
 
 /**
  * Fields each `ui.tab_bar_right` entry type accepts, and which are required.
