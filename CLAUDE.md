@@ -152,15 +152,15 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `src/model/` | `paths.ts`, `parse.ts`, `toml-value.ts`, the comment-preserving patcher `toml-doc.ts`, the leaf diff / patch-or-generate exporter `export.ts`, the chord grammar `keys.ts` and the diagnostics in `validate.ts` |
 | `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits (`set` / `reset` / `apply`, the last being several writes as one undo step), effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette, the landing gate and which tab the export dialog is on |
 | `src/components/preview/` | `HerdrPreview` — the herdr mock, drawn from the effective config — with `sample.ts` (the session it draws), `tokens.ts` (the palette and the token rows) and `regions.ts` (the region → keys map behind click-to-edit) |
-| `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, the editor registry and the generic value editor |
+| `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, `keyboard.ts` (the bare-shortcut rule), the editor registry and the generic value editor |
 | `src/components/editors/` | `KeysEditor` (section `[4]`) and `ChordEditor`, the popover the `keys.*` chords register; `SectionForm` and `register-scalar-editors.tsx`; `RowsEditor` and its `rows-model.ts`, the sidebar token rows with their styles and per-agent overrides; `StatusBarEditor` (section `[3]`, with `status-bar-model.ts`) and `ThemeEditor` (section `[5]`), each also the popover its preview region opens |
 | `src/components/common/` | `KeyChordInput`, `Field` (the generic scalar control, by schema type), and `ColorField` — controls shared by more than one editor, `Field`/`ColorField` by `SectionForm` and the popover editors that claim a key by type |
 | `src/components/io/` | `Landing` — the first screen: drop / pick / paste / start from defaults, with the 1 MiB guard and the line-and-column parse error. `ExportDialog` — the full file and the changed hunks, with download / copy / install snippet and the two destructive verbs |
 | `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
 | `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts` (single and grouped writes), `download.ts` (file / clipboard / install snippet), `diff.ts` (the unified diff the export dialog draws), `capture.ts` (keydown → chord), `keybindings.ts`, `scalar-fields.ts` (which keys `Field` owns — not `keys.*`, not the `theme` table or `ui.accent`, not the structured types) |
-| `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount |
+| `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount; plus the fixtures — a sample user config, herdr's own recorded defaults and `config check` output, used for round-trip and upgrade-diff tests |
 | `e2e/` | Playwright specs, run against `dist/`. One file per area — `shell`, `import-export`, `forms`, `keys`, `rows`, `status-bar`, `theme`, `square-corners` — plus `journeys.spec.ts`, the import → edit → download stories, and `console.ts`, the shared helpers |
-| `scripts/` | `gen-reference.ts`, its parser and fixture, other build-time generators, and `no-network.test.ts` — the sweep of `src/` that holds ADR-0001's "no network calls at runtime" to its word |
+| `scripts/` | `gen-reference.ts`, its parser (`parse-reference.ts`) and the fixture they read offline (`fixtures/config-reference.html`), and `no-network.test.ts` — the sweep of `src/` that holds ADR-0001's "no network calls at runtime" to its word |
 
 `src/App.tsx` assembles the Console chrome behind one branch: `Landing` owns the screen until a
 config is in hand (`useShellStore`'s `landing`), and the export dialog mounts beside the shell
@@ -213,6 +213,12 @@ press outside the frame cancels, so an editor with nothing focusable in it is st
 can leave. `commit` and `cancel` settle it once — the open editor in the store is the latch, so
 whichever is called first wins and later calls are ignored. An editor torn down having called
 neither has cancelled, because `commit` is the only path that writes.
+
+**Live-write exception:** `RowsEditor` and the status bar editor (section `[3]`) don't hold a
+draft — they write through the store on every move, because the preview behind the popover has
+to redraw as the change lands. `esc` on either therefore *closes* rather than *reverts*: the
+moves already made are already in the document, each one its own undo step, and the editor calls
+`cancel()` on the way out because it has nothing left to hand `commit`.
 
 `src/lib/sections.ts` is the map behind the six switches: `homeOf(key)` gives the one section
 that owns a key and `keysOf(section)` gives what the tree lists there. Adding an editor means
@@ -313,6 +319,11 @@ build rather than shipping.
   does.
 - Tailwind scans comments too. A bare utility name in prose emits that utility into the bundle,
   so write `rounded-*` rather than the bare word when describing one.
+- Never reach for an `!important` utility (e.g. a `rounded-full!` shape) to force a corner
+  round. The square-corners rule in `src/index.css` is deliberately unlayered so it beats
+  Tailwind's utilities layer on specificity alone; an `!important` utility outranks an unlayered
+  rule the same way it outranks a layered one, so it would defeat the invariant
+  `square-corners.spec.ts` checks rather than merely losing to it.
 
 <!-- bh:agf:start (managed by `bh hive init` — edit outside these markers; `-f` refreshes) -->
 ## AGF — Agentic Git Flow
