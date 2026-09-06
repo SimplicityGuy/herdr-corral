@@ -11,6 +11,7 @@ import {
   MAX_ANCHOR_HEIGHT,
   POPOVER_ASSUMED_HEIGHT,
   POPOVER_GAP,
+  POPOVER_WIDE_WIDTH,
   POPOVER_WIDTH,
   placeAt,
   shortAnchor,
@@ -65,6 +66,17 @@ describe('placeAt', () => {
   it('nudges a right-hand anchor back inside the viewport', () => {
     const placed = placeAt(anchor({ top: 10, left: 1270, height: 10 }), VIEWPORT, 120)
     expect(placed.left).toBe(VIEWPORT.width - POPOVER_WIDTH - POPOVER_GAP)
+  })
+
+  it('nudges a wide popover back by its own width, not the default column', () => {
+    const placed = placeAt(
+      anchor({ top: 10, left: 1270, height: 10 }),
+      VIEWPORT,
+      120,
+      POPOVER_WIDE_WIDTH,
+    )
+    expect(placed.left).toBe(VIEWPORT.width - POPOVER_WIDE_WIDTH - POPOVER_GAP)
+    expect(placed.left + POPOVER_WIDE_WIDTH).toBeLessThanOrEqual(VIEWPORT.width)
   })
 
   it('never places anything above the gap', () => {

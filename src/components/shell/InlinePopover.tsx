@@ -32,7 +32,7 @@
  * close. That is not decoration: the popover is anchored to a tree row the user
  * was standing on, and losing the row means losing the place in a 167-key list.
  */
-import { editorFor } from '@/components/shell/editor-registry'
+import { editorFor, editorWidthFor } from '@/components/shell/editor-registry'
 import { ValueEditor } from '@/components/shell/editors'
 import { diagnosticsAt, useDiagnostics } from '@/lib/diagnostics'
 import { setKey } from '@/lib/edit'
@@ -140,10 +140,15 @@ export function InlinePopover() {
 
   const path = target.key
   const caption = target.caption ?? path
+  // The width is the editor's own declaration, not a measurement: a drag surface
+  // has to be laid out at its real width before the first paint, or the chips
+  // wrap once and then jump.
+  const width = editorWidthFor(path) ?? POPOVER_WIDTH
   const { left, top } = placeAt(
     target.anchor,
     { width: window.innerWidth, height: window.innerHeight },
     height ?? undefined,
+    width,
   )
 
   function commit(next: TomlValue) {
@@ -160,7 +165,7 @@ export function InlinePopover() {
       open
       tabIndex={-1}
       aria-label={caption}
-      style={{ left, top, width: POPOVER_WIDTH }}
+      style={{ left, top, width }}
       className="fixed z-50 m-0 flex flex-col gap-[6px] border border-coral bg-mantle px-3 py-[10px] text-text shadow-[0_10px_30px_rgba(0,0,0,0.5)] outline-none"
     >
       <div className="text-coral">{`┤ ${caption} ├`}</div>

@@ -1,5 +1,6 @@
 import { clearEditors, registerEditor } from '@/components/shell/editor-registry'
 import { InlinePopover } from '@/components/shell/InlinePopover'
+import { POPOVER_WIDTH } from '@/lib/popover'
 import { SettingsTree } from '@/components/shell/SettingsTree'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'
@@ -121,6 +122,21 @@ describe('InlinePopover', () => {
 
     await user.tab({ shift: true })
     expect(apply).toHaveFocus()
+  })
+
+  it('gives an editor the frame width it registered for', () => {
+    registerEditor('ui.sidebar_width', () => <p>wide</p>, { width: 560 })
+    open('ui.sidebar_width')
+    render(<InlinePopover />)
+
+    expect(screen.getByRole('dialog')).toHaveStyle({ width: '560px' })
+  })
+
+  it('keeps ADR-0002’s column for an editor that asked for nothing', () => {
+    open('ui.sidebar_width')
+    render(<InlinePopover />)
+
+    expect(screen.getByRole('dialog')).toHaveStyle({ width: `${POPOVER_WIDTH}px` })
   })
 
   it('hands the key to whichever editor claimed it', () => {

@@ -22,13 +22,24 @@
  * The height a popover will be is not known until it has been rendered, so
  * `placeAt` takes it as an argument and the host measures it: the first pass
  * uses {@link POPOVER_ASSUMED_HEIGHT} and a layout effect re-places with the real
- * one before the browser paints.
+ * one before the browser paints. The width is known up front — the editor
+ * registry carries it — so it is passed in rather than measured.
  */
 import type { Anchor } from '@/store/shell'
 
 /** ADR-0002's popover is a fixed 360px column; the gap keeps it off its anchor. */
 export const POPOVER_WIDTH = 360
 export const POPOVER_GAP = 6
+
+/**
+ * The width an editor asks for when a 360px column cannot hold it.
+ *
+ * The sidebar rows are the case: sixteen token chips laid out left to right is a
+ * line, and wrapping it at 360px turns the one thing the editor is about — the
+ * order of the tokens in a row — into a puzzle. An editor declares this through
+ * `registerEditor`'s `width` option; nothing else may set a width.
+ */
+export const POPOVER_WIDE_WIDTH = 560
 
 /**
  * What a popover is assumed to be tall before anyone has measured it.
@@ -74,8 +85,9 @@ export function placeAt(
   anchor: Anchor,
   viewport: { width: number; height: number },
   height: number = POPOVER_ASSUMED_HEIGHT,
+  width: number = POPOVER_WIDTH,
 ): Placement {
-  const rightmost = Math.max(POPOVER_GAP, viewport.width - POPOVER_WIDTH - POPOVER_GAP)
+  const rightmost = Math.max(POPOVER_GAP, viewport.width - width - POPOVER_GAP)
   const left = Math.max(POPOVER_GAP, Math.min(anchor.left, rightmost))
 
   // The lowest top that still leaves the whole popover on screen. Negative when

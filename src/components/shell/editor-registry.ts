@@ -22,6 +22,15 @@
  * `editorFor` answers `null` rather than a fallback, because the fallback is a
  * component and a registry that imported one would import the module that imports
  * the registry. The popover picks the fallback instead.
+ *
+ * ## Asking for room
+ *
+ * ADR-0002's popover is a 360px column and every editor gets that by default. An
+ * editor whose subject is a *line* — the sixteen token chips of a sidebar row —
+ * says so once, at registration, with `{ width }`. The claim carries it rather
+ * than the component, so the host knows how wide the frame is before it renders
+ * what goes in it, and `placeAt` can keep the whole frame on screen on the first
+ * pass instead of measuring and moving.
  */
 import type { Diagnostic } from '@/model/validate'
 import type { TomlValue } from '@/model/parse'
@@ -45,20 +54,46 @@ export type EditorComponent = ComponentType<EditorProps>
 /** A claim on one key, or on a family of them. */
 export type EditorClaim = string | ((key: string) => boolean)
 
-const registry: { claim: EditorClaim; editor: EditorComponent }[] = []
+/** What an editor asks of the popover hosting it. */
+export interface EditorOptions {
+  /** A wider frame than ADR-0002's default column, in pixels. */
+  readonly width?: number
+}
+
+interface Registration {
+  readonly claim: EditorClaim
+  readonly editor: EditorComponent
+  readonly options: EditorOptions
+}
+
+const registry: Registration[] = []
 
 /** Claim a key, or a family of keys, for an editor. Later claims win. */
-export function registerEditor(claim: EditorClaim, editor: EditorComponent): void {
-  registry.push({ claim, editor })
+export function registerEditor(
+  claim: EditorClaim,
+  editor: EditorComponent,
+  options: EditorOptions = {},
+): void {
+  registry.push({ claim, editor, options })
+}
+
+function claimFor(path: string): Registration | null {
+  for (let index = registry.length - 1; index >= 0; index--) {
+    const registration = registry[index]
+    const { claim } = registration
+    if (typeof claim === 'string' ? claim === path : claim(path)) return registration
+  }
+  return null
 }
 
 /** The editor claiming this key, or `null` when nothing has. */
 export function editorFor(path: string): EditorComponent | null {
-  for (let index = registry.length - 1; index >= 0; index--) {
-    const { claim, editor } = registry[index]
-    if (typeof claim === 'string' ? claim === path : claim(path)) return editor
-  }
-  return null
+  return claimFor(path)?.editor ?? null
+}
+
+/** The width the claiming editor asked for, or `null` for the default column. */
+export function editorWidthFor(path: string): number | null {
+  return claimFor(path)?.options.width ?? null
 }
 
 /** Forget every registration. Tests use it; nothing else should. */
