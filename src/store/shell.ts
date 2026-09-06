@@ -1,0 +1,143 @@
+/**
+ * View state for the Console shell — what is on screen, not what is in the file.
+ *
+ * `config.ts` owns the document; this owns the chrome around it. The split is the
+ * usual one: nothing here changes what an export would write, and nothing here
+ * survives a reload. It is a separate store rather than four `useState`s in
+ * `App.tsx` because later beads need to reach it without being handed props
+ * through the whole tree — the preview opens editors, a chord recorder flips the
+ * mode badge, the palette jumps sections.
+ *
+ * ## What later beads call
+ *
+ * ```ts
+ * const { openEditor, closeEditor, setMode } = useShellStore.getState()
+ *
+ * // Open the editor for a key, anchored to the region the user clicked.
+ * openEditor({ key: 'ui.sidebar.agents.rows', anchor: element.getBoundingClientRect(), region: 'agents' })
+ *
+ * // Tell the diagnostics line what the user is doing.
+ * setMode('RECORD')   // …and setMode('EDIT') when the chord capture ends.
+ * ```
+ *
+ * `openEditor` also writes the config store's `selection`, so the preview's
+ * "selected region" outline and the tree's focused row follow the popover without
+ * either component knowing about the other. That is the one place the two stores
+ * touch, and it is deliberate: a caller should not have to remember to make two
+ * calls to keep the shell coherent.
+ *
+ * ## Sections
+ *
+ * The shell thinks in the six switches of ADR-0002 (`layout` … `all`); the config
+ * store thinks in the generated schema's `ref-*` section ids. `setSection` takes
+ * the former and mirrors the latter into the config store via `primaryRefSection`,
+ * so a bead reading `selection.section` still sees a reference section id.
+ */
+import { DEFAULT_UI_SECTION, type UiSection, primaryRefSection } from '@/lib/sections'
+import { useConfigStore } from '@/store/config'
+import { create } from 'zustand'
+
+/**
+ * What the diagnostics badge says the user is doing.
+ *
+ * `EDIT` is the resting state. `DRAG` belongs to the row editors while a token is
+ * in flight, `RECORD` to the keybinding editor while it is capturing a chord —
+ * both set by the beads that own those editors, both reset to `EDIT` when done.
+ */
+export type Mode = 'EDIT' | 'DRAG' | 'RECORD'
+
+/** Where a popover should sit: a viewport rectangle, as `getBoundingClientRect` gives. */
+export interface Anchor {
+  readonly top: number
+  readonly left: number
+  readonly width: number
+  readonly height: number
+}
+
+/** An open editor: the key it edits and the thing on screen it belongs to. */
+export interface EditorTarget {
+  /** Dotted schema path. The popover's caption, and what the editor registry matches. */
+  readonly key: string
+  readonly anchor: Anchor
+  /** The preview region that opened it, when one did. Mirrored into `selection`. */
+  readonly region?: string
+  /** Overrides the caption, which is the key path by default. */
+  readonly caption?: string
+}
+
+export interface ShellState {
+  readonly section: UiSection
+  readonly mode: Mode
+  /** The settings tree's `/` filter. Empty means "show the section". */
+  readonly filter: string
+  readonly editor: EditorTarget | null
+  readonly paletteOpen: boolean
+}
+
+export interface ShellActions {
+  /** Switch sections, and point the config store's selection at the same place. */
+  setSection(section: UiSection): void
+  setMode(mode: Mode): void
+  setFilter(filter: string): void
+  /** Open an editor popover for a key, selecting it in the config store. */
+  openEditor(target: EditorTarget): void
+  /** Close the popover. The value stays whatever the editor last applied. */
+  closeEditor(): void
+  setPaletteOpen(open: boolean): void
+}
+
+export type ShellStore = ShellState & ShellActions
+
+/** `anchor` for an element, or a zero rect when there is nothing to anchor to. */
+export function anchorOf(element: Element | null | undefined): Anchor {
+  if (!element) return { top: 0, left: 0, width: 0, height: 0 }
+  const rect = element.getBoundingClientRect()
+  return { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+}
+
+export function initialShellState(): ShellState {
+  return {
+    section: DEFAULT_UI_SECTION,
+    mode: 'EDIT',
+    filter: '',
+    editor: null,
+    paletteOpen: false,
+  }
+}
+
+export const useShellStore = create<ShellStore>()((write) => ({
+  ...initialShellState(),
+
+  setSection(section) {
+    // The filter belongs to the section it was typed in; carrying it across would
+    // open the next section on an empty tree with no visible reason why.
+    write({ section, filter: '', editor: null })
+    useConfigStore.getState().setSection(primaryRefSection(section))
+  },
+
+  setMode(mode) {
+    write({ mode })
+  },
+
+  setFilter(filter) {
+    write({ filter })
+  },
+
+  openEditor(target) {
+    write({ editor: target, paletteOpen: false })
+    useConfigStore.getState().select({ key: target.key, region: target.region })
+  },
+
+  closeEditor() {
+    write({ editor: null })
+  },
+
+  setPaletteOpen(open) {
+    write({ paletteOpen: open })
+  },
+}))
+
+/** Put the shell back to a fresh session. Tests use it. */
+export function resetShellStore(): void {
+  useShellStore.setState(initialShellState())
+}
