@@ -203,10 +203,12 @@ describe('paths that are not settings', () => {
     expect(store().exportText()).toBe(fixture)
   })
 
-  it('refuses a path that names one entry of a list of tables', () => {
+  it('refuses a path that does not end at a key', () => {
     expect(() =>
       store().set('keys.command[2]', { key: 'x', type: 'pane', command: 'zsh' }),
     ).toThrow(UnwritablePathError)
+    expect(() => store().set('', 1)).toThrow(UnwritablePathError)
+    expect(() => store().reset('keys.command[0]')).toThrow(UnwritablePathError)
     expect(store().exportText()).toBe(fixture)
   })
 

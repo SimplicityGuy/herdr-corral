@@ -135,10 +135,11 @@ describe('isLeaf', () => {
     }
   })
 
-  it('rejects a path that ends at one entry of a list of tables', () => {
+  it('rejects a path that does not end at a key', () => {
     expect(isLeaf('keys.command[0]', fixtureValues)).toBe(false)
     expect(isLeaf('keys.command[2]', fixtureValues)).toBe(false)
     expect(isLeaf('ui.tab_bar_right[0]', fixtureValues)).toBe(false)
+    expect(isLeaf('', fixtureValues)).toBe(false)
   })
 
   it('accepts a path no config has yet', () => {

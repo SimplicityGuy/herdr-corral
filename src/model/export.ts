@@ -171,10 +171,13 @@ export class UnwritablePathError extends Error {
  * together over the fixture.
  */
 export function isLeaf(path: string, ...sources: readonly ReadonlyMap<string, unknown>[]): boolean {
-  const target = normalizePath(path)
-  // `keys.command[2]` names one occurrence of an array of tables. There is no key line
-  // to write it on, and `locateKey` throws rather than inventing one.
-  if (target.endsWith(']')) return false
+  // Parsed once and formatted back, rather than normalized and then parsed again.
+  const segments = parsePath(path)
+  const target = formatPath(segments)
+  // A path has to end at a key to be written as one. `keys.command[2]` ends at an
+  // occurrence of an array of tables and the empty path ends nowhere; `locateKey` throws
+  // on both rather than inventing a key line.
+  if (segments.at(-1)?.kind !== 'key') return false
   if (containerKeys.has(target)) return false
   if (wholeValueList.some((whole) => isUnder(target, whole))) return false
   if (wholeValueKeys.has(target)) return true
