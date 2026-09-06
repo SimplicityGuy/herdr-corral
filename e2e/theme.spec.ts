@@ -1,37 +1,16 @@
 import { expect, test } from '@playwright/test'
-import { addedSettings, openConsole } from './console.ts'
+import { addedSettings, openConsole, openPreview } from './console.ts'
 
 /**
  * Section `[5] theme` and the popover the preview opens, walked in a browser.
  *
- * A theme is a claim about what herdr will look like, so the things only a
- * browser can settle are here: that picking one from the swatches writes the
- * name, that a colour herdr cannot read is refused in words rather than in
- * silence, that clicking the mock's theme chip repaints the mock instead of
- * replacing it, and that the popover fits in the window it is drawn in.
+ * Picking a built-in from the swatches and overriding the accent is walked over
+ * the fixture in `journeys.spec.ts`, where both land in bytes. What is here is
+ * what only this screen can settle: that a colour herdr cannot read is refused
+ * in words rather than in silence, that clicking the mock's theme chip repaints
+ * the mock instead of replacing it, and that a palette of nineteen colour rows
+ * fits in the window it is drawn in.
  */
-
-test('section [5] picks a theme from its swatches and overrides the accent', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 820 })
-  await openConsole(page)
-
-  await page.keyboard.press('5')
-  await expect(
-    page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: '[5] theme' }),
-  ).toHaveAttribute('aria-current', 'page')
-  const theme = page.getByRole('region', { name: /^theme/ })
-  await expect(theme).toBeVisible()
-
-  const nord = page.getByRole('button', { name: 'theme nord' })
-  await expect(nord).toHaveAttribute('aria-pressed', 'false')
-  await nord.click()
-  await expect(nord).toHaveAttribute('aria-pressed', 'true')
-
-  await page.getByLabel('ui.accent', { exact: true }).fill('#ff8800')
-
-  expect(await addedSettings(page)).toEqual(['name = "nord"', 'accent = "#ff8800"'])
-  await expect(page.getByText('2 keys changed')).toBeVisible()
-})
 
 test('an unreadable colour is refused in words, not in silence', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
@@ -61,7 +40,7 @@ test('an unreadable colour is refused in words, not in silence', async ({ page }
 test('the preview’s theme chip repaints the mock rather than replacing it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
-  await page.keyboard.press('2')
+  await openPreview(page)
 
   const preview = page.getByRole('region', { name: /^preview/ })
   const sidebar = preview.locator('[data-part="sidebar"]')
@@ -90,7 +69,7 @@ test('the preview’s theme chip repaints the mock rather than replacing it', as
 test('the theme popover fits the window it is drawn in', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
-  await page.keyboard.press('2')
+  await openPreview(page)
 
   await page.getByRole('button', { name: /^theme catppuccin/ }).click()
   const popover = page.getByRole('dialog', { name: 'theme.name' })

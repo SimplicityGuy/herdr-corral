@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test'
-import { openConsole } from './console.ts'
+import { openConsole, openPreview } from './console.ts'
+
+/**
+ * The Console shell itself: the chrome ADR-0002 draws, the keyboard route
+ * through it, and the two rules about where things are allowed to be on screen.
+ *
+ * What an individual editor writes belongs to that editor's spec, and what comes
+ * out of the export belongs to `journeys.spec.ts`; this file is about the frame
+ * they all sit in.
+ */
 
 test('the Console shell loads with its top line', async ({ page }) => {
   await openConsole(page)
@@ -104,28 +113,6 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
   await expect(tree.getByRole('button', { name: /^theme\.auto_switch/ })).toBeFocused()
 })
 
-test('the download is refused while the config has an error', async ({ page }) => {
-  await openConsole(page)
-
-  // 99999 is past herdr's u16 ceiling, so its deserializer rejects the file and
-  // herdr would start on defaults — an error, not a warning.
-  await page.keyboard.press('6')
-  await page.keyboard.press('/')
-  await page.keyboard.type('sidebar_width')
-  await page.keyboard.press('Tab')
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('ControlOrMeta+a')
-  await page.keyboard.type('99999')
-  await page.keyboard.press('Enter')
-
-  await expect(page.getByText(/1 error/)).toBeVisible()
-  const download = page.getByRole('button', { name: /download config\.toml/ })
-  await expect(download).toBeDisabled()
-  await expect(download).toHaveAccessibleDescription(
-    'herdr ignores a config file it cannot read and starts on defaults; fix the errors first',
-  )
-})
-
 /**
  * ADR-0002 gives the top line 30px and asks the shell to hold together down to
  * 960 wide. The switches are the line's job, so they never wrap; the hints give
@@ -161,16 +148,20 @@ for (const width of [960, 1020, 1280]) {
 }
 
 /**
- * "The preview is the editor" (ADR-0002), walked once end to end: click a region
- * of the herdr mock, get the popover for the key that draws it, leave with esc.
+ * "The preview is the editor" (ADR-0002), and the rule that keeps it one:
+ * clicking a region of the mock opens the popover for the key that draws it and
+ * moves the tree's cursor there, but **never changes the centre view**. A
+ * popover anchored to a thing must not have that thing replaced underneath it,
+ * so the mock is still the centre frame while the editor is open and after esc
+ * settles it.
  */
-test('clicking an agent row in the preview edits the rows that draw it', async ({ page }) => {
+test('a region click opens its editor and leaves the mock on screen', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
   // The shell opens on layout, where SectionForm claims the center frame;
   // the mock itself is not section-filtered, so any other section shows the
   // whole thing, agent row and pane border alike.
-  await page.keyboard.press('2')
+  await openPreview(page)
 
   const preview = page.getByRole('region', { name: /^preview/ })
   const row = preview.getByRole('button', { name: 'agent claude' })
@@ -185,11 +176,16 @@ test('clicking an agent row in the preview edits the rows that draw it', async (
   await expect(page.getByRole('navigation', { name: 'Sections' })
     .getByRole('button', { name: '[2] sidebar' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('button', { name: 'ui.sidebar.agents.rows = 2' })).toBeVisible()
+  // The centre frame did not follow the section switch: the mock the popover is
+  // anchored to is still the thing being drawn behind it.
+  await expect(preview).toBeVisible()
+  await expect(row).toBeVisible()
 
   await page.keyboard.press('Escape')
   await expect(popover).toBeHidden()
   // The selection outlives the popover: the region keeps the coral outline and
   // the tree keeps the cursor, which is where the shell puts the focus back.
+  await expect(preview).toBeVisible()
   await expect(row).toHaveAttribute('data-selected', 'true')
   await expect(page.getByRole('button', { name: 'ui.sidebar.agents.rows = 2' })).toBeFocused()
 })
@@ -209,7 +205,7 @@ for (const region of [
     await openConsole(page)
     // Layout, the default section, is SectionForm's center frame now; the
     // mock itself is not section-filtered, so any other section shows it.
-    await page.keyboard.press('2')
+    await openPreview(page)
 
     await page.getByRole('region', { name: /^preview/ }).getByRole('button', { name: region }).click()
 
@@ -229,7 +225,7 @@ test('the shell matches the reference at 1280x820', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
   // Layout, the default section, is SectionForm's center frame now; switch to
   // one the preview and keys beads still own to see the mock itself.
-  await page.keyboard.press('2')
+  await openPreview(page)
 
   // The mock's anatomy, as console-direction.html draws it: a tab row with its
   // right-hand entries, the Spaces and Agents panels, two panes with `┤ ├`
@@ -244,4 +240,27 @@ test('the shell matches the reference at 1280x820', async ({ page }) => {
   await expect(preview.getByRole('button', { name: /notification toast/ })).toBeVisible()
 
   await page.screenshot({ path: 'test-results/console-shell.png' })
+})
+
+/**
+ * Radix keeps `aria-hidden` on the rest of the page until the palette's exit
+ * animation ends, so a jump that moves focus onto a tree row too early is focus
+ * inside hidden content and Chrome says so out loud. The console is the only place
+ * that shows up, so the console is what this test reads.
+ */
+test('jumping from the palette leaves the console clean', async ({ page }) => {
+  const complaints: string[] = []
+  page.on('console', (message) => {
+    if (['error', 'warning'].includes(message.type())) complaints.push(message.text())
+  })
+
+  await openConsole(page)
+
+  await page.keyboard.press('ControlOrMeta+k')
+  await page.keyboard.type('theme.auto_switch')
+  await page.getByRole('option', { name: /theme\.auto_switch/ }).first().click()
+  await expect(page.getByRole('button', { name: /^theme\.auto_switch/ })).toBeFocused()
+
+  expect(complaints.filter((text) => text.includes('aria-hidden'))).toEqual([])
+  expect(complaints).toEqual([])
 })

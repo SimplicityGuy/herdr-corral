@@ -1,6 +1,15 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const PORT = 4173
+/**
+ * The preview server's port.
+ *
+ * A worktree is not the only checkout on this machine — several agents run the
+ * suite at once — and a hard-coded port makes the second run either fail to bind
+ * or, worse, quietly test the *first* worktree's `dist/`. `PLAYWRIGHT_PORT`
+ * gives each run its own port, and `--strictPort` makes a collision an error
+ * rather than a silent hop to the next free one.
+ */
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 4173)
 const BASE_URL = `http://localhost:${PORT}`
 
 /**
@@ -22,7 +31,11 @@ export default defineConfig({
   webServer: {
     command: `pnpm build && pnpm preview --port ${PORT} --strictPort`,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // Reusing a server someone else started is a convenience for the default
+    // port on a developer's machine and a trap everywhere else: in CI it would
+    // hide a broken build, and an explicit `PLAYWRIGHT_PORT` is a request for
+    // *this* worktree's `dist/`, which a foreign server is not.
+    reuseExistingServer: !process.env.CI && !process.env.PLAYWRIGHT_PORT,
     timeout: 120_000,
   },
 })

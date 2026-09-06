@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test'
-import { openConsole } from './console.ts'
+import { downloadConfig, openConsole } from './console.ts'
 
 /**
  * The mode badge, addressed exactly: `copy_mode` and `resize_mode` are rows on
@@ -8,62 +8,27 @@ import { openConsole } from './console.ts'
 const MODE = { exact: true } as const
 
 /**
- * The file corral would hand the user, read out of the export dialog.
+ * The file corral would hand the user, as the bytes the browser writes to disk.
  *
- * Asserting the UI values proves the editor agrees with itself; only the text
- * behind `:w` proves it agrees with herdr, which is what a config file is for.
+ * Asserting the UI values proves the editor agrees with itself; only the
+ * downloaded file proves it agrees with herdr, which is what a config file is
+ * for. Reading the dialog's textarea would prove neither — it is the same string
+ * the editor already showed.
  */
 async function writtenConfig(page: Page): Promise<string> {
-  await page.getByRole('button', { name: /download config\.toml/ }).click()
-  const dialog = page.getByRole('dialog')
-  const text = await dialog.getByLabel('config.toml as it will be written').innerText()
-  await page.keyboard.press('Escape')
-  await expect(dialog).toBeHidden()
-  return text
+  return (await downloadConfig(page)).toString('utf8')
 }
 
 /**
- * The keybindings editor, walked the way ADR-0002 says the shell is driven:
- * `4` opens the section, tab reaches the rows, `enter` starts a recording, and
- * the combination the browser actually delivers is what lands in the file.
+ * The keybindings editor, section `[4]`.
  *
- * This is the one thing a component test cannot prove. jsdom synthesizes a
- * `KeyboardEvent` from whatever a test hands it; only a browser decides that
- * `ctrl+shift+p` arrives as `key: 'P'` with two modifier flags, which is exactly
- * the translation `src/lib/capture.ts` exists to do.
+ * The recording itself — `enter`, a real chord, and the line it writes — is
+ * walked over the fixture in `journeys.spec.ts`, because what a browser settles
+ * about `src/lib/capture.ts` is a claim about the file. What is left here is the
+ * editor's own behaviour around it: an abandoned recording, a recording started
+ * from a tree row, the custom-command blocks, and the two ways a value reaches
+ * the file without an `enter` at all.
  */
-test('recording a chord in section [4] writes it and the tree follows', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 820 })
-  await openConsole(page)
-
-  await page.keyboard.press('4')
-  await expect(
-    page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: '[4] keys' }),
-  ).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('region', { name: /^keybindings/ })).toBeVisible()
-
-  // `/` focuses the tree filter; the tree is one tab stop, so a second tab
-  // leaves it for the first control of the editor in the centre frame.
-  await page.keyboard.press('/')
-  await page.keyboard.press('Tab')
-  await page.keyboard.press('Tab')
-  const record = page.getByRole('button', { name: 'record keys.prefix' })
-  await expect(record).toBeFocused()
-
-  // enter records; the mode badge is the shell saying so.
-  await page.keyboard.press('Enter')
-  await expect(page.getByLabel('mode', MODE)).toHaveText('RECORD')
-
-  await page.keyboard.press('Control+Shift+P')
-  await expect(page.getByRole('textbox', { name: 'keys.prefix' })).toHaveValue('ctrl+shift+p')
-  await expect(page.getByLabel('mode', MODE)).toHaveText('EDIT')
-
-  // The settings tree reads the same store, so the row moved with it.
-  await expect(
-    page.getByRole('button', { name: 'keys.prefix = ctrl+shift+p' }),
-  ).toBeVisible()
-  await expect(page.getByText('1 key changed')).toBeVisible()
-})
 
 test('esc cancels a recording without touching the setting', async ({ page }) => {
   await openConsole(page)
