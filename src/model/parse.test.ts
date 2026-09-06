@@ -4,7 +4,9 @@ import {
   TomlSyntaxError,
   flattenTree,
   isCompleteValue,
+  looksLikeFloat,
   parseToml,
+  parseValue,
   stripBom,
   tryParseToml,
 } from '@/model/parse'
@@ -96,6 +98,25 @@ describe('syntax errors', () => {
 })
 
 describe('probing a value in isolation', () => {
+  it('parses one value on its own, across lines if it wraps', () => {
+    expect(parseValue('"catppuccin"')).toBe('catppuccin')
+    expect(parseValue('{ token = "workspace", bold = true }')).toEqual({
+      token: 'workspace',
+      bold: true,
+    })
+    expect(parseValue('[\n  "a",\n  "b",\n]')).toEqual(['a', 'b'])
+    expect(parseValue('"shell" runs detached')).toBeNull()
+  })
+
+  it('tells a TOML float from a TOML integer by how it is written', () => {
+    for (const text of ['1.5', '2.0', '1e3', '1E3', '-1.5e-3', 'inf', '-inf', 'nan', ' 1.5 ']) {
+      expect(looksLikeFloat(text)).toBe(true)
+    }
+    for (const text of ['1', '-3', '10_000', '0xE', '0o17', '0b101', '"1.5"', '[1.5]']) {
+      expect(looksLikeFloat(text)).toBe(false)
+    }
+  })
+
   it('accepts complete values and rejects prose', () => {
     expect(isCompleteValue('"catppuccin"')).toBe(true)
     expect(isCompleteValue('[["a"], ["b"]]')).toBe(true)

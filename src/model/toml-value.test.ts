@@ -6,6 +6,7 @@ import {
   formatArray,
   formatArrayOfTables,
   formatBoolean,
+  formatDottedKeyValue,
   formatHeader,
   formatInlineTable,
   formatKeyValue,
@@ -60,6 +61,19 @@ describe('scalars', () => {
     expect(formatNumber(1.5)).toBe('1.5')
     expect(formatNumber(1e21)).toBe('1e+21')
     expect(reparse(formatNumber(1.5))).toBe(1.5)
+  })
+
+  it('keeps a whole number on the float side when asked', () => {
+    expect(formatNumber(2, true)).toBe('2.0')
+    expect(formatNumber(-3, true)).toBe('-3.0')
+    expect(formatNumber(2.25, true)).toBe('2.25')
+    expect(formatValue(2, { preferFloat: true })).toBe('2.0')
+    expect(formatKeyValue('delay', 2, { preferFloat: true })).toBe('delay = 2.0')
+  })
+
+  it('does not float numbers nested inside an array or inline table', () => {
+    expect(formatValue([1, 2], { preferFloat: true })).toBe('[1, 2]')
+    expect(formatValue({ a: 1 }, { preferFloat: true })).toBe('{ a = 1 }')
   })
 
   it('renders the TOML spellings of the special floats', () => {
@@ -163,6 +177,12 @@ describe('key lines and headers', () => {
     expect(formatKeyValue('rows', ['aaaa', 'bbbb'], { maxInlineWidth: 22 })).toBe(
       ['rows = [', '  "aaaa",', '  "bbbb",', ']'].join('\n'),
     )
+  })
+
+  it('renders a dotted key line, which is how an implicit table gains a key', () => {
+    expect(formatDottedKeyValue(['b', 'c'], 1)).toBe('b.c = 1')
+    expect(formatDottedKeyValue(['b', 'my agent'], true)).toBe('b."my agent" = true')
+    expect(() => formatDottedKeyValue([], 1)).toThrow(TomlFormatError)
   })
 
   it('renders table and array-of-tables headers', () => {

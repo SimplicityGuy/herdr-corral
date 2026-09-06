@@ -33,6 +33,14 @@ export interface FormatOptions {
   readonly indent?: string
   /** Longest single-line rendering allowed before an array wraps. Defaults to 80. */
   readonly maxInlineWidth?: number
+  /**
+   * Render a whole number as a float (`2.0`, not `2`).
+   *
+   * TOML distinguishes integers from floats but JavaScript does not, so writing `2`
+   * over a `1.5` would quietly change the key's type. Applies to the value itself, not
+   * to numbers nested inside an array or inline table.
+   */
+  readonly preferFloat?: boolean
 }
 
 const DEFAULT_MAX_INLINE_WIDTH = 80
@@ -84,13 +92,18 @@ export function formatBoolean(value: boolean): string {
   return value ? 'true' : 'false'
 }
 
-/** Render a number or bigint, choosing TOML's integer or float syntax. */
-export function formatNumber(value: number | bigint): string {
+/**
+ * Render a number or bigint, choosing TOML's integer or float syntax.
+ *
+ * Pass `preferFloat` to keep a whole number on the float side of that split, which is
+ * what a document does when it is overwriting a value that was already a float.
+ */
+export function formatNumber(value: number | bigint, preferFloat = false): string {
   if (typeof value === 'bigint') return value.toString(10)
   if (Number.isNaN(value)) return 'nan'
   if (value === Number.POSITIVE_INFINITY) return 'inf'
   if (value === Number.NEGATIVE_INFINITY) return '-inf'
-  if (Number.isSafeInteger(value)) return value.toString(10)
+  if (Number.isSafeInteger(value)) return preferFloat ? `${value.toString(10)}.0` : value.toString(10)
   const rendered = String(value)
   return /[.eE]/.test(rendered) ? rendered : `${rendered}.0`
 }
@@ -152,7 +165,7 @@ export function formatValue(value: TomlWritable, options: FormatOptions = {}): s
       return formatBoolean(value)
     case 'number':
     case 'bigint':
-      return formatNumber(value)
+      return formatNumber(value, options.preferFloat)
     case 'object':
       break
     default:
@@ -176,10 +189,29 @@ export function formatKeyValue(
   value: TomlWritable,
   options: FormatOptions = {},
 ): string {
+  return formatDottedKeyValue([key], value, options)
+}
+
+/**
+ * Render a `a.b.c = value` line.
+ *
+ * A dotted key extends a table that some other line already implied, which is how a
+ * document adds to an implicit table without writing a second `[a.b]` header over it.
+ */
+export function formatDottedKeyValue(
+  keys: readonly string[],
+  value: TomlWritable,
+  options: FormatOptions = {},
+): string {
+  if (keys.length === 0) throw new TomlFormatError('a key line needs at least one key')
   const indent = options.indent ?? ''
-  const prefix = `${quoteKey(key)} = `
+  const prefix = `${keys.map(quoteKey).join('.')} = `
   const budget = (options.maxInlineWidth ?? DEFAULT_MAX_INLINE_WIDTH) - prefix.length
-  const rendered = formatValue(value, { indent, maxInlineWidth: Math.max(budget, 1) })
+  const rendered = formatValue(value, {
+    indent,
+    maxInlineWidth: Math.max(budget, 1),
+    preferFloat: options.preferFloat,
+  })
   return `${indent}${prefix}${rendered}`
 }
 

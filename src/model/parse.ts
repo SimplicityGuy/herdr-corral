@@ -116,12 +116,32 @@ export function tryParseToml(text: string): ParseOutcome {
   }
 }
 
-/** True when `text` is a complete, valid TOML value on its own (`"a"`, `[1, 2]`, `{ a = 1 }`). */
-export function isCompleteValue(text: string): boolean {
+/**
+ * Parse one TOML value on its own (`"a"`, `[1, 2]`, `{ a = 1 }`), or `null` when the
+ * text is not a complete value. The text may span lines, as a wrapped array does.
+ */
+export function parseValue(text: string): TomlValue | null {
   try {
-    parseTomlText(`corral_probe = ${text}`)
-    return true
+    return parseTomlText(`corral_probe = ${text}`).corral_probe
   } catch {
-    return false
+    return null
   }
+}
+
+/** True when `text` is a complete, valid TOML value on its own. */
+export function isCompleteValue(text: string): boolean {
+  return parseValue(text) !== null
+}
+
+/**
+ * True when `text` spells a TOML float rather than an integer.
+ *
+ * smol-toml hands both back as JavaScript numbers, so the only way to keep a whole
+ * float from silently becoming an integer on the way out is to read how it was written.
+ */
+export function looksLikeFloat(text: string): boolean {
+  const trimmed = text.trim()
+  if (/^[+-]?(inf|nan)$/.test(trimmed)) return true
+  if (/^[+-]?0[xob]/i.test(trimmed)) return false
+  return /^[+-]?[\d_]+([.][\d_]+)?([eE][+-]?[\d_]+)?$/.test(trimmed) && /[.eE]/.test(trimmed)
 }
