@@ -21,17 +21,16 @@ function Panel({
   className?: string
 }) {
   return (
-    <section
-      aria-label={caption}
-      className={`relative flex min-h-0 flex-col overflow-hidden border border-surface1 ${className}`}
-    >
+    <section aria-label={caption} className="relative flex min-h-0 flex-col border border-surface1">
+      {/* The caption sits on the page background so the frame reads as passing
+          behind it; it must not be clipped, so the panel body owns the overflow. */}
       <span
         aria-hidden="true"
-        className="absolute -top-[9px] left-[10px] bg-crust px-[6px] text-subtext0"
+        className="pointer-events-none absolute -top-[9px] left-[10px] z-10 bg-crust px-[6px] text-[11px] text-subtext0"
       >
         {`┤ ${caption} ├`}
       </span>
-      {children}
+      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${className}`}>{children}</div>
     </section>
   )
 }
