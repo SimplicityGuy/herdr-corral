@@ -131,7 +131,7 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `src/schema/` | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, shared types and typed accessors |
 | `src/model/` | `paths.ts`, `parse.ts`, `toml-value.ts`, the comment-preserving patcher `toml-doc.ts`, the leaf diff / patch-or-generate exporter `export.ts`, the chord grammar `keys.ts` and the diagnostics in `validate.ts` |
 | `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits, effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette |
-| `src/components/preview/` *(planned)* | `HerdrPreview`, sample data, the region → keys map |
+| `src/components/preview/` | `HerdrPreview` — the herdr mock, drawn from the effective config — with `sample.ts` (the session it draws), `tokens.ts` (the palette and the token rows) and `regions.ts` (the region → keys map behind click-to-edit) |
 | `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, the editor registry and the generic value editor |
 | `src/components/editors/` *(planned)* | `RowsEditor`, `StatusBarEditor`, `KeysEditor`, `ThemeEditor`, `SectionForm` |
 | `src/components/io/` *(planned)* | `Landing` (import), `ExportDialog` (download / copy / snippet / diff) |
@@ -141,8 +141,9 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `e2e/` | Playwright specs, run against `dist/` |
 | `scripts/` | `gen-reference.ts`, its parser and fixture, and other build-time generators |
 
-`src/App.tsx` assembles the Console chrome. Later beads fill the regions it lays out — the
-centre frame is a placeholder until the preview bead — rather than inventing a new structure.
+`src/App.tsx` assembles the Console chrome. Later beads fill the regions it lays out rather
+than inventing a new structure. The centre frame holds `HerdrPreview`; the editors a region
+opens are claimed through `registerEditor`, so a bead adds one without touching `App.tsx`.
 
 ### The shell's API
 

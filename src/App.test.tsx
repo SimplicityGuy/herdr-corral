@@ -42,11 +42,12 @@ describe('App', () => {
     expect(tree.getByRole('button', { name: /^ui\.pane_borders/ })).toBeInTheDocument()
   })
 
-  it('leaves the preview frame a placeholder for the preview bead', () => {
+  it('fills the preview frame with the herdr mock', () => {
     render(<App />)
 
     const preview = within(screen.getByRole('region', { name: /^preview/ }))
-    expect(preview.getByText(/The herdr mock lands here/)).toBeInTheDocument()
+    expect(preview.getByRole('button', { name: 'agent claude' })).toBeInTheDocument()
+    expect(preview.getByRole('button', { name: 'tab bar' })).toBeInTheDocument()
   })
 
   it('shows the diagnostics line with the mode badge and the export verb', () => {

@@ -22,6 +22,12 @@
  * An editor with nothing focusable in it — the note shown for a value that is a
  * whole structure — is still a popover the user can leave.
  *
+ * **It is placed so that all of it is on screen.** The shell is
+ * `overflow-hidden`, so a popover that runs off the bottom is not scrollable —
+ * it is unreachable. `placeAt` flips it above its anchor when there is no room
+ * below, which it can only do knowing how tall the frame is, so the frame is
+ * measured in a layout effect and placed again before the browser paints.
+ *
  * Focus is trapped while it is open and returns to the element that opened it on
  * close. That is not decoration: the popover is anchored to a tree row the user
  * was standing on, and losing the row means losing the place in a 167-key list.
@@ -34,7 +40,7 @@ import { POPOVER_WIDTH, placeAt } from '@/lib/popover'
 import type { TomlValue } from '@/model/parse'
 import { useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
-import { createElement, useCallback, useEffect, useRef } from 'react'
+import { createElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 /** Everything focus can land on inside the frame. */
 const FOCUSABLE =
@@ -46,6 +52,10 @@ export function InlinePopover() {
   const effective = useConfigStore((state) => state.effectiveAll())
   const diagnostics = useDiagnostics()
   const frameRef = useRef<HTMLDialogElement>(null)
+  // How tall the editor turned out to be. `placeAt` needs it to keep the frame's
+  // bottom on screen, and nothing knows it until the frame exists — so the first
+  // pass uses the assumed height and this one corrects it before the paint.
+  const [height, setHeight] = useState<number | null>(null)
 
   /**
    * Settle the popover once. `write` is the commit; its absence is the cancel.
@@ -63,6 +73,11 @@ export function InlinePopover() {
     },
     [closeEditor],
   )
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current
+    setHeight(frame === null ? null : frame.offsetHeight)
+  }, [target])
 
   // Take focus on open, and hand it back on close. The restore is the effect's
   // cleanup rather than part of `finish`, so it happens however the popover goes
@@ -125,10 +140,11 @@ export function InlinePopover() {
 
   const path = target.key
   const caption = target.caption ?? path
-  const { left, top } = placeAt(target.anchor, {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  })
+  const { left, top } = placeAt(
+    target.anchor,
+    { width: window.innerWidth, height: window.innerHeight },
+    height ?? undefined,
+  )
 
   function commit(next: TomlValue) {
     finish(() => setKey(path, next))
