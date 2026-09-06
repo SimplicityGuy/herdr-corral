@@ -6,11 +6,16 @@
  * The tree follows the selection, moves the DOM focus onto the row and puts the
  * user exactly where `j`/`k` and `enter` already work. Nothing else has to know.
  *
- * The jump waits for the dialog to close. Selecting first would move the focus
- * onto a tree row while the dialog still has the rest of the page under
- * `aria-hidden`, which is a focus inside hidden content — Chrome logs it and a
- * screen reader would be looking at an element it has been told is not there. So
- * the key is parked, the dialog closes, and an effect does the jump afterwards.
+ * The jump waits for the dialog to be *gone*, which is later than it sounds.
+ * Selecting first would move the focus onto a tree row while the dialog still has
+ * the rest of the page under `aria-hidden`, which is a focus inside hidden content
+ * — Chrome logs "Blocked aria-hidden on an element…" and a screen reader would be
+ * looking at an element it has been told is not there. Watching the `open` flag is
+ * not enough: it flips at the *start* of the exit animation and Radix keeps the
+ * attribute on until the content unmounts at the end of it, so an effect keyed on
+ * `open` still lands inside the hidden window. The key is parked instead, and
+ * `OnTeardown` — mounted inside the dialog, so it dies with it — does the jump one
+ * microtask after that unmount, by which point the attribute is off the page.
  */
 import {
   Command,
@@ -21,7 +26,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { BLOCKED_REASON, FILE_NAME, downloadConfig } from '@/lib/download'
+import { BLOCKED_REASON, FILE_NAME } from '@/lib/download'
 import { summarize, useDiagnostics } from '@/lib/diagnostics'
 import { resetKey } from '@/lib/edit'
 import { UI_SECTIONS, homeOf } from '@/lib/sections'
@@ -30,6 +35,28 @@ import { allKeys } from '@/schema'
 import { useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
 import { useEffect, useRef } from 'react'
+
+/**
+ * Runs `on` when it is unmounted, one microtask later.
+ *
+ * Mounted inside the dialog content, so its teardown is the dialog's: React has
+ * finished deleting the subtree and Radix's `aria-hidden` cleanup has run by the
+ * time the microtask drains. `on` is held in a ref because the cleanup must not be
+ * re-registered when the callback identity changes mid-render.
+ */
+function OnTeardown({ on }: { on: () => void }) {
+  const latest = useRef(on)
+  useEffect(() => {
+    latest.current = on
+  })
+  useEffect(
+    () => () => {
+      queueMicrotask(() => latest.current())
+    },
+    [],
+  )
+  return null
+}
 
 export function CommandPalette() {
   const open = useShellStore((state) => state.paletteOpen)
@@ -51,13 +78,13 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  useEffect(() => {
+  function land() {
     const key = pending.current
-    if (open || key === null) return
+    if (key === null) return
     pending.current = null
     setSection(homeOf(key))
     useConfigStore.getState().select({ key })
-  }, [open, setSection])
+  }
 
   function jumpTo(key: string) {
     pending.current = key
@@ -81,6 +108,7 @@ export function CommandPalette() {
           nothing else, so the cmdk root that the input and the list read their
           context from has to be supplied here. */}
       <Command className="bg-mantle">
+        <OnTeardown on={land} />
         <CommandInput placeholder="jump to a setting, or run a command" />
         <CommandList>
           <CommandEmpty>nothing matches</CommandEmpty>
@@ -109,10 +137,12 @@ export function CommandPalette() {
             >
               reset key to herdr&rsquo;s default
             </CommandItem>
+            {/* `:w` is in the value, not just the label, because cmdk scores the
+                value and the user types the verb they see on the line. */}
             <CommandItem
-              value={`download ${FILE_NAME}`}
+              value={`:w download ${FILE_NAME}`}
               disabled={blocked}
-              onSelect={() => run(() => downloadConfig(FILE_NAME))}
+              onSelect={() => run(() => useShellStore.getState().openExport('file'))}
             >
               <span>{`:w  download ${FILE_NAME}`}</span>
               {blocked && <span className="ml-auto text-overlay0">{BLOCKED_REASON}</span>}
