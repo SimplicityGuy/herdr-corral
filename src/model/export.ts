@@ -22,7 +22,7 @@
  */
 
 import type { TomlValue } from '@/model/parse'
-import { locateHeader, locateKey, normalizePath } from '@/model/paths'
+import { formatPath, locateHeader, locateKey, normalizePath, parsePath } from '@/model/paths'
 import { TomlDocument } from '@/model/toml-doc'
 import { type TomlWritable, formatHeader, formatKeyValue } from '@/model/toml-value'
 import { allEntries } from '@/schema/index.ts'
@@ -87,6 +87,30 @@ function comparePaths(a: string, b: string): number {
 }
 
 /**
+ * Every path that strictly contains `path`, from the outermost in.
+ *
+ * `keys.command[0].key` yields `keys`, `keys.command` and `keys.command[0]`. This goes
+ * through the path parser rather than scanning for dots, because a quoted key may hold
+ * dots and brackets of its own — `rows_by_agent."my agent"` is two segments, not three.
+ */
+function containingPaths(path: string): string[] {
+  const segments = parsePath(path)
+  const out: string[] = []
+  for (let depth = 1; depth < segments.length; depth++) {
+    out.push(formatPath(segments.slice(0, depth)))
+  }
+  return out
+}
+
+const schemaLeafSet: ReadonlySet<string> = new Set(schemaLeaves)
+
+/** The paths the schema's own keys sit inside. Fixed, so it is built once. */
+const schemaContainers = new Set<string>()
+for (const path of schemaLeaves) {
+  for (const prefix of containingPaths(path)) schemaContainers.add(prefix)
+}
+
+/**
  * Every path that is written as one unit, for the configs given.
  *
  * The schema's keys come first, in the reference page's order, followed by whatever the
@@ -116,8 +140,17 @@ export function leaves(...sources: readonly ConfigValues[]): string[] {
     (path) =>
       !containerKeys.has(path) && !wholeValueList.some((whole) => isUnder(path, whole)),
   )
+  // A path is a container exactly when some surviving path sits inside it. Collecting
+  // what each path sits inside costs one pass; asking every path about every other one
+  // would cost 175 × 175 on each diff.
+  const containers = new Set<string>()
+  for (const path of standalone) {
+    if (schemaLeafSet.has(path)) continue
+    for (const prefix of containingPaths(path)) containers.add(prefix)
+  }
   return standalone.filter(
-    (path) => wholeValueKeys.has(path) || !standalone.some((other) => isUnder(other, path)),
+    (path) =>
+      wholeValueKeys.has(path) || !(containers.has(path) || schemaContainers.has(path)),
   )
 }
 
@@ -139,6 +172,9 @@ export class UnwritablePathError extends Error {
  */
 export function isLeaf(path: string, ...sources: readonly ReadonlyMap<string, unknown>[]): boolean {
   const target = normalizePath(path)
+  // `keys.command[2]` names one occurrence of an array of tables. There is no key line
+  // to write it on, and `locateKey` throws rather than inventing one.
+  if (target.endsWith(']')) return false
   if (containerKeys.has(target)) return false
   if (wholeValueList.some((whole) => isUnder(target, whole))) return false
   if (wholeValueKeys.has(target)) return true
@@ -153,6 +189,23 @@ export function isLeaf(path: string, ...sources: readonly ReadonlyMap<string, un
 
 function isTable(value: TomlValue): value is Record<string, TomlValue> {
   return typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)
+}
+
+/**
+ * True when `value` is an array of tables, which TOML writes as `[[name]]` blocks.
+ *
+ * `parse.ts` expands any such array into `path[i].key` leaves as well as recording the
+ * array itself, so a path holding one is read back as its fields. Writing the array whole
+ * is only safe where the schema says that key *is* one value — `ui.tab_bar_right` — which
+ * is what keeps `leaves` from dropping it in favour of the expansion on the next load.
+ */
+export function isTableArrayValue(value: TomlValue): boolean {
+  return Array.isArray(value) && value.length > 0 && value.every((element) => isTable(element))
+}
+
+/** True when `path` is a key the schema says holds one whole value. */
+export function isWholeValueKey(path: string): boolean {
+  return wholeValueKeys.has(normalizePath(path))
 }
 
 /** Deep equality for TOML values: arrays by element, tables by key, dates by instant. */

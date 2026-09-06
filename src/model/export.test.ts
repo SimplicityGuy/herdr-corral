@@ -11,7 +11,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { GENERATED_HEADER, diff, generate, isLeaf, leaves, patch } from '@/model/export'
+import {
+  GENERATED_HEADER,
+  diff,
+  generate,
+  isLeaf,
+  isTableArrayValue,
+  leaves,
+  patch,
+} from '@/model/export'
 import { type TomlValue, parseToml } from '@/model/parse'
 import { useConfigStore, resetConfigStore } from '@/store/config'
 import fixture from '@/test/fixture-user-config.toml?raw'
@@ -127,9 +135,30 @@ describe('isLeaf', () => {
     }
   })
 
+  it('rejects a path that ends at one entry of a list of tables', () => {
+    expect(isLeaf('keys.command[0]', fixtureValues)).toBe(false)
+    expect(isLeaf('keys.command[2]', fixtureValues)).toBe(false)
+    expect(isLeaf('ui.tab_bar_right[0]', fixtureValues)).toBe(false)
+  })
+
   it('accepts a path no config has yet', () => {
     expect(isLeaf('keys.command[9].key', fixtureValues)).toBe(true)
     expect(isLeaf('ui.sidebar.agents.rows_by_agent.codex', fixtureValues)).toBe(true)
+  })
+})
+
+describe('isTableArrayValue', () => {
+  it('spots the shape TOML writes as blocks', () => {
+    expect(isTableArrayValue([{ key: 'x' }, { key: 'y' }])).toBe(true)
+  })
+
+  it('leaves every other shape alone', () => {
+    expect(isTableArrayValue([])).toBe(false)
+    expect(isTableArrayValue([['state_icon', 'workspace']])).toBe(false)
+    expect(isTableArrayValue(['a', 'b'])).toBe(false)
+    expect(isTableArrayValue([{ token: 'agent' }, 'tab'])).toBe(false)
+    expect(isTableArrayValue({ key: 'x' })).toBe(false)
+    expect(isTableArrayValue('x')).toBe(false)
   })
 })
 
