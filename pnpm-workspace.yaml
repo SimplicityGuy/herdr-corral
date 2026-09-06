@@ -1,0 +1,5 @@
+# pnpm >= 11 reads settings from here, not from package.json.
+# esbuild ships prebuilt binaries via a postinstall script; it must be allowed
+# or `vite build` fails with "You installed esbuild for another platform".
+allowBuilds:
+  esbuild: true

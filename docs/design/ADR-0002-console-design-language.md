@@ -86,3 +86,25 @@ single heavy shadow so they read as floating.
   visible focus state in coral.
 - The mockup in `console-direction.html` is the visual contract for the shell bead; later beads
   follow the tokens in `src/index.css`, not the mockup's inline styles.
+
+## Amendments during v1
+
+Three decisions were settled during implementation rather than at the time this ADR was
+accepted; recorded here rather than in a new ADR because none of them reverses the decision
+above, they refine it.
+
+- **The coral accent maps to `--color-coral` and feeds `--ring`, not `--primary`.** shadcn/ui
+  already owns `--accent` for a component's own hover background, so this ADR's `--accent` token
+  is `--color-coral` in the codebase. `--primary` — the fill of every default shadcn `Button` —
+  stays `--surface0` on `--text`, so buttons render as the chip the mockup draws
+  (`:w download config.toml`) rather than a solid coral call-to-action. Coral is spent on exactly
+  the three things above: the mode badge, the focus ring, and the selected region's outline.
+- **A region click never changes the centre view.** The shell store holds two separate facts —
+  `section` (what the tree and the top line are on) and `centre` (`'preview' | 'section'`, which
+  frame the middle column draws). A top-line switch sets both; a click on a region of the herdr
+  mock sets only `section`, so the tree's cursor follows the click, and pins `centre` to the
+  preview, because a popover anchored to a region must not have that region replaced underneath
+  it.
+- **Popovers are height-capped with a scrolling body.** An editor with more rows than the window
+  has room for is still fully reachable rather than running off-screen; a popover can also be
+  registered wide, for an editor whose rows don't fit the mockup's narrower reference width.

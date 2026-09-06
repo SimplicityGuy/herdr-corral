@@ -1,0 +1,28 @@
+# A deliberately wrong config, kept so corral's diagnostics can be diffed
+# against herdr's own. `fixture-herdr-check.txt` records what herdr prints for
+# exactly this file; `src/model/validate.test.ts` reads both.
+#
+# Every setting here is wrong in a different way: an unknown theme name, an
+# unknown color, a broken window title, an unknown key, a rebinding that
+# displaces a default, a direct binding that would swallow typing, a
+# navigate-mode key herdr reserves, inverted sidebar bounds, and an empty
+# custom command.
+
+[theme]
+name = "catppucin"
+
+[ui]
+sidebar_min_width = 40
+sidebar_max_width = 30
+accent = "octarine"
+window_title = "{host}"
+sidebar_wdith = 30
+
+[keys]
+rename_tab = "prefix+c"
+help = "x"
+navigate_pane_down = "esc"
+
+[[keys.command]]
+key = "prefix+alt+g"
+command = "  "

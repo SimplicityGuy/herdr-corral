@@ -1,0 +1,20 @@
+# Recorded output of herdr 0.8.2's own config checker, for diffing on a bump.
+#
+#   HERDR_CONFIG_PATH=src/test/fixture-herdr-check.toml herdr config check
+#
+# Re-record it after a herdr upgrade and read the diff: a line that changed is a
+# rule that changed, and `src/model/validate.ts` has to follow. Lines starting
+# with `#` are this header; everything after the `config:` line is herdr's.
+#
+# corral reports all seven of these, at the paths named in validate.test.ts, and
+# adds one herdr does not collect here: `ui.accent = "octarine"` is an unknown
+# color, which parse_color logs through tracing rather than returning as a
+# diagnostic (src/config/theme.rs:185-188).
+config: issues found
+unknown config key ui.sidebar_wdith; ignoring key
+navigate keybinding cannot use esc: keys.navigate_pane_down = "esc"; disabling binding
+unsafe direct keybinding: keys.help = "x" would intercept typing; use "prefix+x" to require the prefix; disabling binding
+empty custom command: keys.command[0].command; disabling custom command
+unknown theme name theme.name = "catppucin"; using "catppuccin"; valid themes: catppuccin, catppuccin-latte, terminal, tokyo-night, tokyo-night-day, dracula, nord, gruvbox, gruvbox-light, one-dark, one-light, solarized, solarized-light, kanagawa, kanagawa-lotus, rose-pine, rose-pine-dawn, vesper
+ui.window_title has unknown token '{host}'; leaving the outer terminal title alone
+ui.sidebar_min_width (40) is greater than sidebar_max_width (30)

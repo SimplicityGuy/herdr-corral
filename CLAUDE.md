@@ -57,24 +57,273 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
 
-
 ## Build & Test
 
-_Add your build and test commands here_
+Package manager is **pnpm**. Node 22 or newer.
 
 ```bash
-# Example:
-# npm install
-# npm test
+pnpm install          # pnpm install --frozen-lockfile in CI
+pnpm dev              # Vite dev server on :5173
+pnpm check            # typecheck && lint && test && build — the gate; run before handoff
+pnpm test:e2e         # Playwright against the built app on :4173 (separate from check)
+
+PLAYWRIGHT_PORT=4180 pnpm test:e2e   # ... on a port of this worktree's own
+```
+
+| Script | What it does |
+| --- | --- |
+| `dev` | Vite dev server with HMR |
+| `build` | `tsc -b && vite build` → `dist/` |
+| `preview` | serve `dist/` locally |
+| `typecheck` | `tsc -b` across the app and node tsconfig projects |
+| `lint` | `oxlint --deny-warnings` |
+| `test` | `vitest run` — unit and component tests only |
+| `test:watch` | `vitest` in watch mode |
+| `test:e2e` | `playwright test`; builds and previews `dist/` itself |
+| `check` | typecheck → lint → test → build |
+| `gen:reference` | regenerates `src/schema/reference.json` from herdr.dev; `--offline` parses the committed fixture instead |
+
+`check` deliberately excludes e2e so the inner loop stays fast. CI runs both. Unit tests come
+from `src/**` and `scripts/**`, so the schema generator is covered by the same gate as the app.
+
+### Running e2e in a worktree, alongside others
+
+`pnpm test:e2e` builds `dist/` and serves it on **4173**, and that port is one shared resource
+on the machine. Two worktrees running the suite at once collide, and the loser does something
+worse than fail: `reuseExistingServer` attaches it to the *other* worktree's server, and it
+reports green against a bundle it never built. Give each worktree a port of its own:
+
+```bash
+PLAYWRIGHT_PORT=4180 pnpm test:e2e
+lsof -nP -iTCP:4173 -sTCP:LISTEN     # ... or check first whether the default is free
+```
+
+`PLAYWRIGHT_PORT` sets the preview port and `baseURL` together, and setting it *also* turns
+`reuseExistingServer` off — an explicit port is a request for this checkout's `dist/`, which a
+server someone else started is not. `--strictPort` makes a taken port an error rather than a
+silent hop to the next one, and CI never reuses a server at all. The workflow leaves the
+variable unset and runs on 4173, unchanged.
+
+### Refreshing the generated schema
+
+The three files under `src/schema/` are generated and must never be hand-edited. A herdr
+upgrade is a regenerate-and-diff:
+
+```bash
+pnpm gen:reference                       # src/schema/reference.json, from herdr.dev
+pnpm gen:reference --update-fixture      # ... and refresh scripts/fixtures/config-reference.html
+herdr --default-config > src/schema/default-config.toml
+```
+
+`reference.json` is deterministic: re-running against an unchanged page leaves the tree clean.
+The generator fails rather than writing a thin file if the page yields fewer than 150 settings,
+so a site redesign is noticed. The fixture backs `--offline` and the parser's unit test, and is
+only rewritten when you ask for it, because the page carries build-hash noise.
+
+`src/schema/themes.json` is lifted from herdr's own source — `src/app/state.rs` (`impl Palette`)
+and `src/config/theme.rs` (`THEME_NAMES`, `CustomThemeColors`) at the release tag, cited in the
+file's `source` field. Re-derive it from the new tag on a herdr bump; a palette that cannot be
+sourced is marked `"approximate": true` rather than invented.
+
+**nvm caveat.** The operator's zsh profile lazy-loads nvm and recurses in non-interactive
+shells: `node` and `pnpm` print `_nvm_load: command not found` until the stack overflows. When
+that happens, call the binaries directly, or put them first on `PATH`:
+
+```bash
+export PATH=/Users/Robert/.nvm/versions/node/v26.7.0/bin:/opt/homebrew/bin:$PATH
+unset -f node npm npx pnpm 2>/dev/null   # drop the lazy-load shims in this shell
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+corral is a **static single-page app** (ADR-0001). Everything is client-side: read a
+`config.toml`, edit it in memory, render a live mock of herdr, write the file back with the
+user's comments intact. No server, no account, no network calls at runtime.
+
+Stack: Vite · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui (Radix) · dnd-kit
+(`@dnd-kit/core` + `@dnd-kit/sortable`, the stable API) · zustand · smol-toml for parsing only ·
+vitest + Testing Library · Playwright · oxlint.
+
+Layers and ownership — directories marked *(planned)* arrive with later beads:
+
+| Path | Owns |
+| --- | --- |
+| `src/schema/` | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, shared types and typed accessors |
+| `src/model/` | `paths.ts`, `parse.ts`, `toml-value.ts`, the comment-preserving patcher `toml-doc.ts`, the leaf diff / patch-or-generate exporter `export.ts`, the chord grammar `keys.ts` and the diagnostics in `validate.ts` |
+| `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits (`set` / `reset` / `apply`, the last being several writes as one undo step), effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette, the landing gate and which tab the export dialog is on |
+| `src/components/preview/` | `HerdrPreview` — the herdr mock, drawn from the effective config — with `sample.ts` (the session it draws), `tokens.ts` (the palette and the token rows) and `regions.ts` (the region → keys map behind click-to-edit) |
+| `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, `keyboard.ts` (the bare-shortcut rule), the editor registry and the generic value editor |
+| `src/components/editors/` | `KeysEditor` (section `[4]`) and `ChordEditor`, the popover the `keys.*` chords register; `SectionForm` and `register-scalar-editors.tsx`; `RowsEditor` and its `rows-model.ts`, the sidebar token rows with their styles and per-agent overrides; `StatusBarEditor` (section `[3]`, with `status-bar-model.ts`) and `ThemeEditor` (section `[5]`), each also the popover its preview region opens |
+| `src/components/common/` | `KeyChordInput`, `Field` (the generic scalar control, by schema type), and `ColorField` — controls shared by more than one editor, `Field`/`ColorField` by `SectionForm` and the popover editors that claim a key by type |
+| `src/components/io/` | `Landing` — the first screen: drop / pick / paste / start from defaults, with the 1 MiB guard and the line-and-column parse error. `ExportDialog` — the full file and the changed hunks, with download / copy / install snippet and the two destructive verbs |
+| `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
+| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts` (single and grouped writes), `download.ts` (file / clipboard / install snippet), `diff.ts` (the unified diff the export dialog draws), `capture.ts` (keydown → chord), `keybindings.ts`, `scalar-fields.ts` (which keys `Field` owns — not `keys.*`, not the `theme` table or `ui.accent`, not the structured types) |
+| `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount; plus the fixtures — a sample user config, herdr's own recorded defaults and `config check` output, used for round-trip and upgrade-diff tests |
+| `e2e/` | Playwright specs, run against `dist/`. One file per area — `shell`, `import-export`, `forms`, `keys`, `rows`, `status-bar`, `theme`, `square-corners` — plus `journeys.spec.ts`, the import → edit → download stories, and `console.ts`, the shared helpers |
+| `scripts/` | `gen-reference.ts`, its parser (`parse-reference.ts`) and the fixture they read offline (`fixtures/config-reference.html`), and `no-network.test.ts` — the sweep of `src/` that holds ADR-0001's "no network calls at runtime" to its word |
+
+`src/App.tsx` assembles the Console chrome behind one branch: `Landing` owns the screen until a
+config is in hand (`useShellStore`'s `landing`), and the export dialog mounts beside the shell
+because both `:w` and the palette open it. Later beads fill the regions it lays out rather than
+inventing a new structure. The centre frame is one line per section — `SectionForm` for the two
+non-visual sections (`layout`, `all`), `KeysEditor` for `keys`, `StatusBarView` for `status`,
+`ThemeView` for `theme` — falling through to `HerdrPreview`, the default, for the rest; a bead
+adding its own editor for a remaining section replaces just its own line. **Region clicks never
+change the centre view.** The shell holds two facts, not one: `section` is what the tree and the
+top line are on, and `centre` (`'preview' | 'section'`) is which frame the middle draws. A switch
+sets both, through `centreOf`; a click on a region of the mock sets only the section — so the tree
+cursor can follow the click — and pins `centre` to the preview, because a popover anchored to a
+thing must not have that thing replaced underneath it. The editors a preview
+region opens are claimed through `registerEditor`, so a bead adds one without touching `App.tsx` —
+except for the **import order**, which is load-bearing: later claims win, so a module that takes a
+key back off `register-scalar-editors`' type-based claim must be imported after it.
+
+### The shell's API
+
+Four small surfaces, and nothing else, are what a later bead needs:
+
+```ts
+import { useShellStore, anchorOf } from '@/store/shell'
+import { registerEditor, type EditorProps } from '@/components/shell/editor-registry'
+import { homeOf, keysOf } from '@/lib/sections'
+import { useDiagnostics } from '@/lib/diagnostics'
+```
+
+- **Open an editor.** `useShellStore.getState().openEditor({ key, anchor, region?, caption? })`
+  puts the popover on screen anchored to a viewport rectangle — `anchorOf(element)` builds one
+  — and mirrors `{ key, region }` into the config store's `selection`, so the tree's focused
+  row and the preview's selected outline follow without talking to each other. Passing `region`
+  also pins the centre frame to the preview, which is what "a region click never changes the
+  centre view" means in code; a caller with no region leaves the centre as it found it.
+  `closeEditor()` is the other half; `esc` already calls it.
+  The popover is capped at `maxPopoverHeight` (`lib/popover.ts`) and scrolls inside that, so an
+  editor with more rows than the window has is still reachable in a shell that does not scroll.
+- **Claim a key.** `registerEditor(key | predicate, Component)` at module scope, with `App.tsx`
+  importing the module that registers. The component takes `EditorProps` and calls exactly one
+  of `commit(value)` or `cancel()` — the popover owns the transaction, so `esc` cancels without
+  the editor hearing about it, and focus returns to whatever opened the popover.
+  Anything unclaimed falls through to the generic `ValueEditor`.
+- **Set the mode badge.** `useShellStore.getState().setMode('DRAG' | 'RECORD' | 'EDIT')`. The
+  diagnostics line reads it; nothing else does.
+- **Read diagnostics.** `useDiagnostics()` returns the current `Diagnostic[]`, computed once per
+  document and shared by the tree, the line and the popover. Do not call `validate()` again.
+
+The popover, not the editor, owns dismissal: `esc` is a document-level listener and a pointer
+press outside the frame cancels, so an editor with nothing focusable in it is still one the user
+can leave. `commit` and `cancel` settle it once — the open editor in the store is the latch, so
+whichever is called first wins and later calls are ignored. An editor torn down having called
+neither has cancelled, because `commit` is the only path that writes.
+
+**Live-write exception:** `RowsEditor` and the status bar editor (section `[3]`) don't hold a
+draft — they write through the store on every move, because the preview behind the popover has
+to redraw as the change lands. `esc` on either therefore *closes* rather than *reverts*: the
+moves already made are already in the document, each one its own undo step, and the editor calls
+`cancel()` on the way out because it has nothing left to hand `commit`.
+
+`src/lib/sections.ts` is the map behind the six switches: `homeOf(key)` gives the one section
+that owns a key and `keysOf(section)` gives what the tree lists there. Adding an editor means
+adding a rule there, and `sections.test.ts` fails if a key ends up with no home or a rule with
+no key.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+### Invariants
+
+Every bead preserves these, and tests enforce them:
+
+1. **Export never regenerates a loaded file.** `TomlDocument` applies targeted text edits and
+   untouched lines come back byte-identical (fixture test). Only "start over from defaults"
+   generates a whole file.
+2. **Only changed leaves are written.** An explicit value equal to the default is still
+   written; "reset" removes the key.
+3. **The schema is generated, never hand-edited.** `schema.test.ts` cross-checks
+   `reference.json` against `default-config.toml` in both directions. Neither file is a superset
+   of the other, so each direction carries a named exceptions list, and an entry that has stopped
+   being an exception fails just as loudly as a new gap.
+4. **Validation mirrors herdr**: 16 rows × 16 tokens, `tab_bar_right` entries ≤ 16, chord
+   grammar, navigate-mode restrictions, color syntax, enum sets, integer ranges.
+5. **Every schema key belongs to exactly one UI home** — `src/lib/sections.ts`, enforced by
+   `sections.test.ts`, which also fails a rule that no longer matches any key.
+6. **Download is blocked while diagnostics contain errors**, because herdr discards a file it
+   cannot deserialize and starts on defaults. `DiagnosticsLine` refuses the `:w` door and
+   `ExportDialog` refuses the download and the install snippet behind it; `:diff` and a plain
+   copy of the text are never blocked, because reading what is wrong is what the user needs.
+7. **A value is shown as the user spelled it.** `normalizeChord('plus')` answers `'+'`, which
+   `parseChord` does not read back, so the tree prints strings verbatim and only summarizes the
+   shapes that have no one-line spelling — as a count, which nobody mistakes for the value.
+
+### Design language
+
+The editor is a TUI in the browser and **the preview is the editor** (ADR-0002).
+`docs/design/console-direction.html` is the visual contract;
+`docs/design/ADR-0002-console-design-language.md` is the specification.
+
+- Tokens live in `src/index.css` and nowhere else. Use the Tailwind utilities they generate
+  (`bg-crust`, `bg-mantle`, `bg-base`, `bg-surface0`, `border-surface1`, `text-overlay0`,
+  `text-subtext0`, `text-text`, `text-coral`, and the semantic `text-green` / `yellow` / `red` /
+  `mauve` / `blue` / `teal` / `peach`). Never copy a hex value into a component, and never take
+  colors from the mockup's inline styles.
+- ADR-0002 calls the coral accent `--accent`. shadcn/ui already owns `--accent` for a
+  component's hover background, so the coral is **`--color-coral`** here. Every other token
+  keeps the ADR's name verbatim.
+- **Coral feeds `--ring` and nothing else.** ADR-0002 spends it on three things — the mode
+  badge, the focus ring, the selected region — and `--primary` is the fill of every default
+  shadcn Button, so pointing `--primary` at coral would put a solid coral block behind every
+  button and leave the accent meaning nothing. `--primary` is `--surface0` on `--text`, which
+  is how the mockup draws `:w download config.toml`: a chip, not a call to action.
+- One font: JetBrains Mono Variable, self-hosted. 13px / 1.45 body, 12px in the preview and the
+  diagnostics line, 11px for panel captions. No second face.
+- Square corners everywhere. `--radius: 0` and the collapsed `--radius-*` scale handle the
+  named steps, but three shapes have a fixed radius the scale never touches: `rounded-full`,
+  arbitrary values like `rounded-[4px]`, and the unsuffixed utility. An unlayered rule at the
+  bottom of `src/index.css` zeroes those, and `e2e/square-corners.spec.ts` measures the computed
+  radius in a browser so the claim is checked rather than asserted. It must stay unlayered:
+  inside `@layer base` it would lose to Tailwind's utilities layer whatever its specificity.
+  `rounded-[inherit]` is exempt, because it propagates a parent's radius rather than setting one.
+  No gradients, no pills, no shadows on panels; only popovers get a shadow.
+- Panels are 1px `--surface1` frames with a `┤ caption ├` caption interrupting the top edge,
+  drawn as text on the page background.
+- The chrome is fixed dark and never follows the OS theme. Only the herdr preview renders
+  themes, including light ones, and it paints its own colors.
+
+### Accessibility
+
+The keyboard rules in ADR-0002 set the bar: every control has an accessible name and a visible
+coral focus state, and every drag has a keyboard equivalent (dnd-kit's keyboard sensor plus
+explicit move commands). Tests query by role and accessible name, so a missing label fails the
+build rather than shipping.
+
+### Tooling
+
+- Import with the `@/` alias, which resolves to `src/`. It is declared in the root `tsconfig.json`
+  (the shadcn CLI reads that one) and in `tsconfig.app.json` (tsc reads that one). There is no
+  `baseUrl`; TypeScript 6 deprecates it and `tsc -b` errors on it.
+- Add shadcn components with the CLI (`pnpm dlx shadcn@latest add -y <name>`), then restyle
+  through the tokens rather than editing the vendored file.
+- `.oxlintrc.json` relaxes `react/only-export-components` and four `jsx-a11y` rules for
+  `src/components/ui/**` only, because those files are vendored upstream code. Our own
+  components get the full rule set.
+- pnpm 11 reads settings from `pnpm-workspace.yaml`, not from a `pnpm` key in `package.json`.
+  `allowBuilds: esbuild: true` lives there; without it `vite build` fails on a missing binary.
+- Playwright runs against `dist/`, not the dev server, so e2e exercises the shipped bundle.
+  Its specs compile under `tsconfig.e2e.json`, which is the only project with both the Node and
+  DOM libraries, because `page.evaluate` callbacks run in the browser.
+- **Claims about the exported file are made about bytes.** `e2e/journeys.spec.ts` owns them:
+  it opens `src/test/fixture-user-config.toml` through the file chooser, drives the editors,
+  and compares what the browser downloads (`downloadConfig`, `diffLines` in `e2e/console.ts`)
+  against the fixture. Reading the export dialog's textarea proves nothing — the dialog and the
+  editor read the same store, so they agree whatever the patcher did. An area spec asserts what
+  its editor does on screen; an assertion that is really about the file belongs in the journey.
+- A spec that needs a control focused reaches it with `tabTo` (`e2e/console.ts`), which walks
+  the tab order. `.focus()` proves the control exists, not that ADR-0002's keyboard route to it
+  does.
+- Tailwind scans comments too. A bare utility name in prose emits that utility into the bundle,
+  so write `rounded-*` rather than the bare word when describing one.
+- Never reach for an `!important` utility (e.g. a `rounded-full!` shape) to force a corner
+  round. The square-corners rule in `src/index.css` is deliberately unlayered so it beats
+  Tailwind's utilities layer on specificity alone; an `!important` utility outranks an unlayered
+  rule the same way it outranks a layered one, so it would defeat the invariant
+  `square-corners.spec.ts` checks rather than merely losing to it.
 
 <!-- bh:agf:start (managed by `bh hive init` — edit outside these markers; `-f` refreshes) -->
 ## AGF — Agentic Git Flow
