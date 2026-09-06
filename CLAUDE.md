@@ -129,7 +129,7 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | Path | Owns |
 | --- | --- |
 | `src/schema/` | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, shared types and typed accessors |
-| `src/model/` *(planned)* | paths, TOML value formatting, the comment-preserving patcher (`toml-doc.ts`), parse, chord grammar, validation, export |
+| `src/model/` | `paths.ts`, `parse.ts`, `toml-value.ts` and the comment-preserving patcher `toml-doc.ts`; chord grammar, validation and export are still *(planned)* |
 | `src/store/` *(planned)* | zustand: original text, parsed values, edits, effective config, undo/redo, selection, section |
 | `src/components/preview/` *(planned)* | `HerdrPreview`, sample data, the region → keys map |
 | `src/components/shell/` *(planned)* | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, the inline popover host |

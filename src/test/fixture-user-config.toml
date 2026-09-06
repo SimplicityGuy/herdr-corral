@@ -1,0 +1,100 @@
+# herdr configuration
+# Place this file at ~/.config/herdr/config.toml
+#
+# Hand-edited. The comments below are load-bearing for the round-trip fixture: corral
+# must give this file back byte for byte when it has nothing to change.
+
+# Show first-run notification setup on startup.
+# Missing also shows onboarding; set false after you've chosen.
+# onboarding = true
+
+[theme]
+# Built-in themes: catppuccin, terminal, tokyo-night, dracula, nord,
+#                  gruvbox, one-dark, solarized, kanagawa, rose-pine, vesper
+name = "catppuccin"
+
+# Follow host terminal light/dark appearance and switch Herdr UI themes.
+# auto_switch = false
+# dark_name = "catppuccin"
+# light_name = "catppuccin-latte"
+
+# Override individual color tokens on top of the base theme.
+# Accepts: hex (#rrggbb), named colors, rgb(r,g,b), or panel_bg = "reset"
+[theme.custom]
+sidebar_bg    = "#181825"
+active_row_bg = "#1e1e2e"
+panel_bg      = "reset"
+accent        = "#f5c2e7"
+
+[terminal]
+# Empty means $SHELL, then /bin/sh.
+default_shell = "/opt/homebrew/bin/fish"
+# Startup mode for new interactive pane shells: "auto", "login", or "non_login".
+# "auto" uses login shells on macOS and keeps the current behavior elsewhere.
+shell_mode = "login"     # "auto", "login", or "non_login"
+# new_cwd = "follow"
+
+[keys]
+# Prefix key to enter prefix mode (default: "ctrl+b")
+prefix = "ctrl+a"
+# type = "shell" runs detached in the background — prose, not a default.
+# Examples: "ctrl+b", "f12", "esc", "-"
+# open_worktree = ""      # optional, unset by default
+split_vertical = "prefix+v"
+split_horizontal = "prefix+minus"
+# toggle_sidebar = "prefix+b"
+
+# Custom commands use the same binding syntax.
+# Popup width and height accept terminal cells or percentages such as "80%".
+[[keys.command]]
+key = "prefix+alt+g"
+type = "popup"
+command = "lazygit"
+width = "80%"
+height = "80%"
+
+[[keys.command]]
+key = "prefix+alt+t"
+type = "pane"
+command = "btop"
+
+[ui]
+sidebar_width = 26
+mouse_capture = true
+window_title = "{hostname}: {workspace}"
+# sidebar_start_collapsed = false
+
+# Ordered status entries at the right edge of the desktop tab bar.
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "hostname" },
+  { type = "datetime", format = "%H:%M" },
+]
+
+accent = "cyan"
+
+# Expanded agent rows. A token occurrence may be styled with
+# { token = "workspace", fg = "#89b4fa", bold = true, dim = false }.
+[ui.sidebar.agents]
+row_gap = 0
+rows = [
+  ["state_icon", { token = "workspace", fg = "#89b4fa", bold = true }, "tab"],
+  [{ token = "agent", fg = "#a6e3a1", dim = true }, "$model"],
+]
+
+[ui.sidebar.agents.rows_by_agent]
+claude = [["state_icon", "workspace", "tab"], ["terminal_title_stripped"], ["agent"]]
+
+[ui.sidebar.spaces]
+rows = [["state_icon", "workspace"], ["branch", "git_status"]]
+
+[ui.toast]
+delivery = "herdr"
+# delay_seconds = 1
+
+# Per-agent overrides: default | on | off
+# [ui.sound.agents]
+# droid = "off"
+
+[advanced]
+scrollback_limit_bytes = 10000000
