@@ -21,6 +21,7 @@
  * the palette open it and neither should own it.
  */
 import '@/components/editors/ChordEditor'
+import '@/components/editors/RowsEditor'
 import { KeysEditor } from '@/components/editors/KeysEditor'
 import { ExportDialog } from '@/components/io/ExportDialog'
 import { Landing } from '@/components/io/Landing'

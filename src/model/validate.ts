@@ -373,8 +373,12 @@ const SPECIAL_KEYS: ReadonlySet<string> = new Set([
  * `claude-code` and `github-copilot` are rejected even though herdr detects them
  * (src/detect/mod.rs:183-186). These also differ from the `ui.sound.agents.*`
  * field names, which spell two of them `open_code` and `github_copilot`.
+ *
+ * Exported because the rows editor offers these ids as chips: the list a person
+ * picks from and the list the validator checks against have to be the same list,
+ * or the editor writes overrides its own diagnostics reject.
  */
-const CANONICAL_AGENT_IDS: readonly string[] = [
+export const CANONICAL_AGENT_IDS: readonly string[] = [
   'pi',
   'claude',
   'codex',
