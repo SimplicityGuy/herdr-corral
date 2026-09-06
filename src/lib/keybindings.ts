@@ -23,6 +23,7 @@
  *   testable, and what keeps the array from going sparse.
  */
 import type { ExportOp } from '@/model/export'
+import { navigateRejection, parseBinding, parseChord } from '@/model/keys'
 import type { TomlTable, TomlValue } from '@/model/parse'
 import { COMMAND_FIELDS, COMMAND_TYPES, type Diagnostic } from '@/model/validate'
 import { allKeys } from '@/schema'
@@ -148,6 +149,37 @@ export function conflictsFor(
 export function conflictMessage(conflict: Conflict, key: string): string {
   const pair = `duplicate ${conflict.label}: kept ${conflict.kept}, disabled ${conflict.disabled}`
   return conflict.kept === key ? `${pair} — this action keeps the chord` : pair
+}
+
+/** The six actions that run inside herdr's navigate mode. */
+export function isNavigateAction(path: string): boolean {
+  return path.startsWith('keys.navigate_')
+}
+
+/**
+ * Why a field will not write what it is holding, or `null` when it will.
+ *
+ * Two refusals, both of them herdr's. A string herdr's parser cannot read is not
+ * a binding, and writing one would put a line in the file that herdr answers by
+ * disabling the action — so the field says so instead of writing it and letting
+ * the diagnostics line complain afterwards. And navigate mode refuses `prefix+`,
+ * `esc` and the keys it moves with, in its own words.
+ *
+ * `parseBinding` rather than `parseChord`, because the indexed actions bind the
+ * `1..9` range, which is a binding herdr accepts and a chord it does not.
+ *
+ * Only ever asked when a value *settles*. Judging every keystroke would stop
+ * someone typing their way through `pre`, `prefi`, `prefix`.
+ */
+export function bindingProblem(path: string, text: string): string | null {
+  const trimmed = text.trim()
+  if (trimmed === '') return null
+  if (parseBinding(trimmed) === null) {
+    return `corral cannot read ${JSON.stringify(trimmed)} as a herdr keybinding`
+  }
+  if (!isNavigateAction(path)) return null
+  const chord = parseChord(trimmed)
+  return chord === null ? null : navigateRejection(chord)
 }
 
 // ---------------------------------------------------------------------------

@@ -85,6 +85,60 @@ describe('KeysEditor', () => {
     expect(useConfigStore.getState().isDirty()).toBe(false)
   })
 
+  it('writes through when the prefix+ toggle is ticked', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+
+    // `keys.remote_image_paste` is a direct chord, so the toggle has somewhere
+    // to go: ticking it must reach the file, not just the field.
+    await user.click(
+      screen.getByRole('checkbox', { name: 'prefix+ for keys.remote_image_paste' }),
+    )
+
+    expect(useConfigStore.getState().effective('keys.remote_image_paste')).toBe('prefix+ctrl+v')
+    expect(exported()).toContain('remote_image_paste = "prefix+ctrl+v"')
+
+    await user.click(
+      screen.getByRole('checkbox', { name: 'prefix+ for keys.remote_image_paste' }),
+    )
+    expect(useConfigStore.getState().effective('keys.remote_image_paste')).toBe('ctrl+v')
+  })
+
+  it('writes a typed chord when focus leaves the field', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+
+    const field = screen.getByRole('textbox', { name: 'keys.help' })
+    await user.clear(field)
+    await user.type(field, 'prefix+f1')
+    await user.click(screen.getByRole('button', { name: 'reset keys.settings' }))
+
+    expect(useConfigStore.getState().effective('keys.help')).toBe('prefix+f1')
+    expect(exported()).toContain('help = "prefix+f1"')
+  })
+
+  it('refuses a chord herdr cannot read, and says so instead of writing it', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+
+    const field = screen.getByRole('textbox', { name: 'keys.zoom' })
+    await user.clear(field)
+    await user.type(field, 'prefix+{Enter}')
+
+    expect(screen.getByText(/cannot read "prefix\+" as a herdr keybinding/)).toBeInTheDocument()
+    expect(useConfigStore.getState().effective('keys.zoom')).toBe('prefix+z')
+  })
+
+  it('takes the 1..9 range an indexed action binds', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+
+    const field = screen.getByRole('textbox', { name: 'keys.switch_workspace' })
+    await user.type(field, 'prefix+alt+1..9{Enter}')
+
+    expect(useConfigStore.getState().effective('keys.switch_workspace')).toBe('prefix+alt+1..9')
+  })
+
   it('takes a typed chord on enter', async () => {
     const user = userEvent.setup()
     render(<KeysEditor />)
@@ -218,6 +272,25 @@ describe('KeysEditor · [[keys.command]]', () => {
     expect(screen.getByRole('textbox', { name: 'keys.command[0].command' })).toHaveValue('htop')
     expect(screen.queryByRole('textbox', { name: 'keys.command[1].command' })).not.toBeInTheDocument()
     expect(exported()).toContain('command = "htop"')
+  })
+
+  it('undoes a removal in one step', async () => {
+    const user = userEvent.setup()
+    render(<KeysEditor />)
+    const add = screen.getByRole('button', { name: '+ add command' })
+
+    await user.click(add)
+    await user.click(add)
+    await user.type(screen.getByRole('textbox', { name: 'keys.command[1].command' }), 'htop{Enter}')
+    await user.click(screen.getByRole('button', { name: 'remove keys.command[0]' }))
+    expect(screen.queryByRole('textbox', { name: 'keys.command[1].command' })).not.toBeInTheDocument()
+
+    // Moving every entry down a slot is one thing the user did, so it is one
+    // thing to take back.
+    act(() => useConfigStore.getState().undo())
+
+    expect(screen.getByRole('textbox', { name: 'keys.command[1].command' })).toHaveValue('htop')
+    expect(screen.getByRole('textbox', { name: 'keys.command[0].command' })).toHaveValue('')
   })
 
   it('records a chord into a custom command', async () => {

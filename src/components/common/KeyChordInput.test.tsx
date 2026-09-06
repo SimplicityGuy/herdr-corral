@@ -13,7 +13,9 @@ const NAME = 'keys.split_vertical'
 
 /**
  * The field is controlled, so a test that types into it needs something holding
- * the value — a parent, exactly as the section view and the popover are.
+ * the value — a parent, exactly as the section view and the popover are. It
+ * takes a settled value the same way the real ones do, by writing it and
+ * handing the field the result.
  */
 function Host({
   initial,
@@ -30,6 +32,14 @@ function Host({
       onChange={(next) => {
         setValue(next)
         props.onChange?.(next)
+      }}
+      onCommit={(next) => {
+        setValue(next)
+        props.onCommit?.(next)
+      }}
+      onRecord={(next) => {
+        setValue(next)
+        props.onRecord?.(next)
       }}
     />
   )
@@ -143,17 +153,60 @@ describe('KeyChordInput', () => {
     expect(useShellStore.getState().mode).toBe('EDIT')
   })
 
-  it('toggles the prefix marker onto and off the value', async () => {
+  it('settles the value when the prefix marker is toggled, rather than only drafting it', async () => {
     const user = userEvent.setup()
-    const { onChange, field } = setup('ctrl+v')
+    const { onCommit, field } = setup('ctrl+v')
     const toggle = screen.getByRole('checkbox', { name: `prefix+ for ${NAME}` })
 
     await user.click(toggle)
-    expect(onChange).toHaveBeenCalledWith('prefix+ctrl+v')
+    // The commit path, not the draft path: a toggle that only moved the draft
+    // would show a `prefix+` the file does not have.
+    expect(onCommit).toHaveBeenCalledWith('prefix+ctrl+v')
     expect(field).toHaveValue('prefix+ctrl+v')
 
     await user.click(toggle)
+    expect(onCommit).toHaveBeenLastCalledWith('ctrl+v')
     expect(field).toHaveValue('ctrl+v')
+  })
+
+  it('settles a typed chord when focus leaves the field', async () => {
+    const user = userEvent.setup()
+    const { field, onCommit } = setup('')
+    render(<button type="button">elsewhere</button>)
+
+    await user.type(field, 'prefix+f1')
+    expect(onCommit).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'elsewhere' }))
+    expect(onCommit).toHaveBeenCalledWith('prefix+f1')
+  })
+
+  it('keeps the value in hand while focus moves inside the control', async () => {
+    const user = userEvent.setup()
+    const { field, onCommit } = setup('')
+
+    await user.type(field, 'ctrl+v')
+    await user.click(screen.getByRole('checkbox', { name: `prefix+ for ${NAME}` }))
+
+    // The toggle committed once, for itself; the blur onto it did not.
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCommit).toHaveBeenCalledWith('prefix+ctrl+v')
+  })
+
+  it('says so when a key has no herdr spelling, instead of looking deaf', async () => {
+    const user = userEvent.setup()
+    const { record, onRecord } = setup()
+
+    await user.click(record)
+    fireEvent.keyDown(record, { key: 'ContextMenu' })
+
+    expect(screen.getByText(/cannot spell that key/)).toBeInTheDocument()
+    expect(record).toHaveAttribute('aria-pressed', 'true')
+    expect(onRecord).not.toHaveBeenCalled()
+
+    // A modifier on its way to a chord is not a failure and says nothing.
+    fireEvent.keyDown(record, { key: 'P', ctrlKey: true, shiftKey: true })
+    expect(onRecord).toHaveBeenCalledWith('ctrl+shift+p')
   })
 
   it('offers no prefix toggle where herdr does not allow one', () => {

@@ -513,3 +513,44 @@ describe('the whole effective config', () => {
     expect(store().effectiveAll()).toBe(values)
   })
 })
+
+describe('apply', () => {
+  it('makes several writes one undo step', () => {
+    store().apply([
+      { kind: 'set', path: 'keys.command[0].command', value: 'lazygit' },
+      { kind: 'set', path: 'keys.command[0].type', value: 'popup' },
+      { kind: 'set', path: 'ui.sidebar_width', value: 30 },
+    ])
+    expect(store().changedLeaves()).toHaveLength(3)
+
+    store().undo()
+
+    expect(store().isDirty()).toBe(false)
+    expect(store().past).toHaveLength(0)
+  })
+
+  it('takes removals and writes in the order it is given them', () => {
+    store().loadText(fixture)
+    store().apply([
+      { kind: 'remove', path: 'keys.command[0].command' },
+      { kind: 'set', path: 'keys.command[0].command', value: 'gitui' },
+    ])
+    expect(store().effective('keys.command[0].command')).toBe('gitui')
+  })
+
+  it('is nothing at all when no op changes anything', () => {
+    store().loadText(fixture)
+    store().apply([{ kind: 'set', path: 'theme.name', value: 'catppuccin' }])
+    expect(store().past).toHaveLength(0)
+  })
+
+  it('writes none of a batch that names a path it cannot write', () => {
+    expect(() =>
+      store().apply([
+        { kind: 'set', path: 'ui.sidebar_width', value: 30 },
+        { kind: 'set', path: 'theme.custom', value: { base: '#000000' } },
+      ]),
+    ).toThrow(UnwritablePathError)
+    expect(store().isDirty()).toBe(false)
+  })
+})

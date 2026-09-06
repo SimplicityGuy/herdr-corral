@@ -61,12 +61,13 @@ const NAMED_EVENT_KEYS: ReadonlyMap<string, string> = new Map([
 ])
 
 /**
- * Keys that are held rather than pressed, and keys herdr cannot spell.
+ * Keys that are held rather than pressed.
  *
  * A recorder that treated `Shift` as a chord would capture the modifier the user
- * is still reaching across, so these are skipped and the capture keeps waiting.
+ * is still reaching across, so a press of one is not a failed capture — it is
+ * the middle of a successful one, and the recorder keeps waiting without a word.
  */
-const NOT_A_CHORD: ReadonlySet<string> = new Set([
+const HELD_MODIFIERS: ReadonlySet<string> = new Set([
   'control',
   'shift',
   'alt',
@@ -77,6 +78,16 @@ const NOT_A_CHORD: ReadonlySet<string> = new Set([
   'hyper',
   'fn',
   'fnlock',
+])
+
+/**
+ * Keys herdr has no spelling for.
+ *
+ * These *are* a finished press, and one corral cannot write down, so a recorder
+ * says so rather than appearing to ignore the key — which is the difference
+ * between this set and `HELD_MODIFIERS`.
+ */
+const UNSPELLABLE: ReadonlySet<string> = new Set([
   'capslock',
   'numlock',
   'scrolllock',
@@ -103,7 +114,7 @@ interface CapturedKey {
 
 function keyOf(press: KeyPress): CapturedKey | null {
   const lower = press.key.toLowerCase()
-  if (NOT_A_CHORD.has(lower)) return null
+  if (HELD_MODIFIERS.has(lower) || UNSPELLABLE.has(lower)) return null
 
   const named = NAMED_EVENT_KEYS.get(lower)
   if (named !== undefined) return { token: named, consumesShift: false }
@@ -148,6 +159,17 @@ export function chordFromPress(press: KeyPress, prefix = false): string | null {
   const parts = [...modifiersOf(press, captured.consumesShift), captured.token]
   const text = `${prefix ? 'prefix+' : ''}${parts.join('+')}`
   return parseChord(text) === null ? null : text
+}
+
+/**
+ * True when this press is a modifier the user is still holding down.
+ *
+ * A recorder tells the two failures apart with this: a held modifier means keep
+ * waiting, and anything else `chordFromPress` refuses is a key corral cannot
+ * write down and has to say so about.
+ */
+export function isHeldModifier(press: KeyPress): boolean {
+  return HELD_MODIFIERS.has(press.key.toLowerCase())
 }
 
 /** True when this press is the `esc` that cancels a recording. */

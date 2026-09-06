@@ -25,29 +25,40 @@
  * one that won says what it silently switched off. A second implementation of
  * "these two collide" is a second thing to keep in step with herdr.
  *
- * ## Navigate mode
+ * ## What a field refuses
  *
- * Six actions run inside herdr's navigate mode, which refuses `prefix+`, `esc`
- * and the keys it moves with. Those rows have no `prefix+` toggle, and a
- * `prefix+` chord typed into one is refused with herdr's own message from
- * `navigateRejection` rather than written and then complained about.
+ * `bindingProblem` decides, and only when a value *settles* — a completed
+ * recording, `enter`, ticking `prefix+`, or focus leaving the field. Two things
+ * are refused: a string herdr's parser cannot read at all, and, on the six
+ * navigate-mode actions, the `prefix+`, `esc` and movement keys navigate mode
+ * reserves. Both keep the draft on screen with herdr's own sentence under it
+ * rather than writing a line herdr would answer by disabling the action.
+ * Navigate rows also have no `prefix+` toggle, so the refusal is mostly a thing
+ * the typing fallback runs into.
+ *
+ * A draft the *file* already holds is a different matter: `validate()` is
+ * already reporting it on the row, so the field stays quiet and only speaks
+ * about an edit it will not write.
  *
  * ## What it writes
  *
  * Only leaves, always through `src/lib/edit.ts`: `keys.<action>` for a binding,
  * `keys.command[i].<field>` for a custom command. A cleared field is a `reset`,
  * which takes the key back out of the file rather than writing an empty string.
+ * A change that is several writes — removing a command moves every entry after
+ * it down a slot — goes through `applyEdits`, so it is one step to undo.
  */
 import { KeyChordInput } from '@/components/common/KeyChordInput'
 import { Panel } from '@/components/shell/Panel'
 import { diagnosticsAt, useDiagnostics } from '@/lib/diagnostics'
-import { resetKey, setKey } from '@/lib/edit'
+import { applyEdits, resetKey, setKey } from '@/lib/edit'
 import {
   COMMAND_TYPES,
   type Conflict,
   DEFAULT_COMMAND_TYPE,
   INDEXED_KEYS,
   appendCommandOps,
+  bindingProblem,
   commandField,
   commandsIn,
   conflictMessage,
@@ -55,11 +66,10 @@ import {
   conflictsIn,
   groupedBindings,
   isConflictMessage,
+  isNavigateAction,
   parseSize,
   removeCommandOps,
 } from '@/lib/keybindings'
-import type { ExportOp } from '@/model/export'
-import { navigateRejection, parseChord } from '@/model/keys'
 import type { TomlTable, TomlValue } from '@/model/parse'
 import { type Diagnostic, bindingValues } from '@/model/validate'
 import { byKey, defaultOf } from '@/schema'
@@ -86,28 +96,6 @@ function useDraft(current: string): [string, (next: string) => void] {
   return [draft, setDraft]
 }
 
-/** The six actions that live inside navigate mode. */
-function isNavigate(path: string): boolean {
-  return path.startsWith('keys.navigate_')
-}
-
-/**
- * Why this field refuses the chord, or `null` when it accepts it.
- *
- * Only navigate mode refuses anything before it is written: everything else is
- * herdr's opinion of a value it has already read, which belongs in the
- * diagnostics line rather than in a field that will not take a keystroke.
- */
-function rejectionOf(path: string, text: string): string | null {
-  if (!isNavigate(path)) return null
-  const trimmed = text.trim()
-  if (trimmed === '') return null
-  const chord = parseChord(trimmed)
-  // A string that is not a chord at all is `validate()`'s to report; refusing it
-  // here would stop someone typing their way through `pre`, `prefi`, `prefix`.
-  return chord === null ? null : navigateRejection(chord)
-}
-
 /** herdr's documented default for a binding, as the row prints it. */
 function defaultLabel(path: string): string {
   const value = defaultOf(path)
@@ -121,14 +109,6 @@ function singleChord(value: TomlValue | undefined): string | null {
   if (values === null) return null
   if (values.length === 0) return ''
   return values.length === 1 ? values[0] : null
-}
-
-/** Apply a list of ops the way the shell writes anything else. */
-function applyOps(ops: readonly ExportOp[]): void {
-  for (const op of ops) {
-    if (op.kind === 'remove') resetKey(op.path)
-    else setKey(op.path, op.value)
-  }
 }
 
 export function KeysEditor() {
@@ -184,15 +164,17 @@ function BindingRow({
   const current = singleChord(value)
   const [draft, setDraft] = useDraft(current ?? '')
 
-  const rejection = rejectionOf(path, draft)
   const action = path.slice('keys.'.length)
   const description = byKey(path)?.description ?? ''
+  // A draft the file already holds is the file's problem, and `validate()` is
+  // already saying so on this row; only an edit that will not be written needs
+  // the field to explain itself.
+  const pending = draft.trim() !== (current ?? '').trim()
+  const problem = pending ? bindingProblem(path, draft) : null
 
   function apply(next: string): void {
-    if (rejectionOf(path, next) !== null) {
-      setDraft(next)
-      return
-    }
+    setDraft(next)
+    if (bindingProblem(path, next) !== null) return
     if (next.trim() === '') resetKey(path)
     else setKey(path, next.trim())
   }
@@ -216,12 +198,9 @@ function BindingRow({
             name={path}
             value={draft}
             onChange={setDraft}
-            onRecord={(next) => {
-              setDraft(next)
-              apply(next)
-            }}
+            onRecord={apply}
             onCommit={apply}
-            allowPrefix={!isNavigate(path)}
+            allowPrefix={!isNavigateAction(path)}
           />
         )}
         <span className="shrink-0 text-overlay0">{`default ${defaultLabel(path)}`}</span>
@@ -239,7 +218,7 @@ function BindingRow({
         diagnostics={diagnostics}
         extra={[
           ...conflicts.map((conflict) => conflictMessage(conflict, path)),
-          ...(rejection === null ? [] : [rejection]),
+          ...(problem === null ? [] : [problem]),
         ]}
       />
     </li>
@@ -267,7 +246,7 @@ function CommandList({
         {'[[keys.command]]'}
         <button
           type="button"
-          onClick={() => applyOps(appendCommandOps(commands))}
+          onClick={() => applyEdits(appendCommandOps(commands))}
           className="bg-surface0 px-2 py-[2px] text-text"
         >
           + add command
@@ -309,6 +288,15 @@ function CommandRow({
   const keyPath = commandField(index, 'key')
   const chord = singleChord(entry.key)
   const [draft, setDraft] = useDraft(chord ?? '')
+  const pending = draft.trim() !== (chord ?? '').trim()
+  const problem = pending ? bindingProblem(keyPath, draft) : null
+
+  function applyChord(next: string): void {
+    setDraft(next)
+    if (bindingProblem(keyPath, next) !== null) return
+    if (next.trim() === '') resetKey(keyPath)
+    else setKey(keyPath, next.trim())
+  }
 
   const type = typeof entry.type === 'string' ? entry.type : DEFAULT_COMMAND_TYPE
   const popup = type === 'popup'
@@ -325,14 +313,8 @@ function CommandRow({
             name={keyPath}
             value={draft}
             onChange={setDraft}
-            onRecord={(next) => {
-              setDraft(next)
-              setKey(keyPath, next)
-            }}
-            onCommit={(next) => {
-              if (next.trim() === '') resetKey(keyPath)
-              else setKey(keyPath, next.trim())
-            }}
+            onRecord={applyChord}
+            onCommit={applyChord}
           />
         )}
         <select
@@ -350,7 +332,7 @@ function CommandRow({
         <button
           type="button"
           aria-label={`remove keys.command[${index}]`}
-          onClick={() => applyOps(removeCommandOps(commands, index))}
+          onClick={() => applyEdits(removeCommandOps(commands, index))}
           className="shrink-0 bg-surface0 px-2 py-[2px] text-subtext0 hover:text-red"
         >
           remove
@@ -379,7 +361,7 @@ function CommandRow({
           />
         </div>
       )}
-      <Messages diagnostics={diagnostics} extra={[]} />
+      <Messages diagnostics={diagnostics} extra={problem === null ? [] : [problem]} />
     </li>
   )
 }

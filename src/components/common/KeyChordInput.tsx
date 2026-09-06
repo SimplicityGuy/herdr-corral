@@ -29,14 +29,30 @@
  * pressed — which is what the acceptance for this bead asks for — and the
  * `prefix+` marker is a checkbox the user sets, on the value, before or after.
  *
+ * ## When a value settles
+ *
  * The field is controlled and holds no draft of its own: what it shows is what
  * its parent passes, verbatim, because a chord is shown as the user spelled it
- * (invariant 7). Applying is the parent's business too — the section view writes
- * a recording straight to the store, and the popover commits and closes.
+ * (invariant 7). *Applying* is the parent's business too — the section view
+ * writes straight to the store, and the popover commits and closes — but this
+ * decides *when*: a completed recording, `enter`, ticking `prefix+`, and focus
+ * leaving the control. The last one matters more than it sounds. A chord typed
+ * into a field that only listened for `enter` is lost the moment the user clicks
+ * anything else, and the field goes on showing a value the file does not have.
+ *
+ * Focus moving *inside* the control is not leaving it: tabbing from the text
+ * field to the `prefix+` toggle is still work on the same value, and in the
+ * popover a commit would close the very thing being tabbed through.
  */
-import { chordFromPress, cancelsRecording, hasPrefix, withPrefix } from '@/lib/capture'
+import {
+  cancelsRecording,
+  chordFromPress,
+  hasPrefix,
+  isHeldModifier,
+  withPrefix,
+} from '@/lib/capture'
 import { useShellStore } from '@/store/shell'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /** The TUI input, matching the generic value editor's field. */
 const FIELD =
@@ -51,7 +67,12 @@ export interface KeyChordInputProps {
   onChange(next: string): void
   /** A recording completed. Defaults to `onChange`. */
   onRecord?(next: string): void
-  /** `enter` in the text field: apply what is typed. */
+  /**
+   * The value settled: `enter` in the text field, or focus leaving the field.
+   *
+   * Without this a typed chord is a draft nobody ever writes — the user types
+   * it, clicks elsewhere, and the field still reads it while the file does not.
+   */
   onCommit?(next: string): void
   /** Offer the `prefix+` toggle. Navigate-mode actions turn it off. */
   readonly allowPrefix?: boolean
@@ -66,7 +87,13 @@ export function KeyChordInput({
   allowPrefix = true,
 }: KeyChordInputProps) {
   const [recording, setRecording] = useState(false)
+  const [unspellable, setUnspellable] = useState(false)
+  const groupRef = useRef<HTMLSpanElement>(null)
   const apply = onRecord ?? onChange
+  // Ticking the toggle is a decision rather than a keystroke on the way to one,
+  // so it settles the value exactly as `enter` does. A toggle that only moved
+  // the draft would show a `prefix+` the file does not have.
+  const settle = onCommit ?? onChange
 
   // The mode badge belongs to the shell, and it is the shell's own word for what
   // this field is doing. Ending the recording puts it back, however the
@@ -90,7 +117,14 @@ export function KeyChordInput({
         return
       }
       const chord = chordFromPress(event)
-      if (chord === null) return
+      if (chord === null) {
+        // A modifier still being held is the middle of a capture; anything else
+        // is a key herdr has no spelling for, and saying nothing about one would
+        // look exactly like a recorder that had stopped listening.
+        setUnspellable(!isHeldModifier(event))
+        return
+      }
+      setUnspellable(false)
       setRecording(false)
       apply(chord)
     }
@@ -101,16 +135,22 @@ export function KeyChordInput({
   const prefix = hasPrefix(value)
 
   return (
-    <span className="flex min-w-0 flex-1 items-center gap-2">
+    <span ref={groupRef} className="flex min-w-0 flex-1 items-center gap-2">
       <button
         type="button"
         aria-label={`record ${name}`}
         aria-pressed={recording}
-        onClick={() => setRecording((on) => !on)}
+        onClick={() => {
+          setUnspellable(false)
+          setRecording((on) => !on)
+        }}
+        // ADR-0002 spends the solid coral fill on the mode badge, so a field that
+        // is recording wears the accent as an outline rather than borrowing the
+        // badge's own treatment.
         className={
           recording
-            ? 'shrink-0 bg-coral px-2 py-[2px] font-bold text-crust'
-            : 'shrink-0 bg-surface0 px-2 py-[2px] text-text'
+            ? 'shrink-0 border border-coral px-2 py-[2px] font-bold text-coral'
+            : 'shrink-0 border border-transparent bg-surface0 px-2 py-[2px] text-text'
         }
       >
         {recording ? '◉ recording' : '◎ record'}
@@ -126,6 +166,16 @@ export function KeyChordInput({
           event.preventDefault()
           onCommit(event.currentTarget.value)
         }}
+        // Leaving the field settles it, but only when focus leaves the whole
+        // control: tabbing on to the `prefix+` toggle is still working on the
+        // same value, and in the popover a commit closes the thing being tabbed
+        // through.
+        onBlur={(event) => {
+          if (onCommit === undefined) return
+          const next = event.relatedTarget
+          if (next instanceof Node && groupRef.current?.contains(next) === true) return
+          onCommit(event.target.value)
+        }}
         className={FIELD}
       />
       {allowPrefix && (
@@ -134,14 +184,18 @@ export function KeyChordInput({
             type="checkbox"
             aria-label={`prefix+ for ${name}`}
             checked={prefix}
-            onChange={(event) => onChange(withPrefix(value, event.target.checked))}
+            onChange={(event) => settle(withPrefix(value, event.target.checked))}
             className="size-[13px] accent-coral"
           />
           prefix+
         </label>
       )}
       {recording && (
-        <output className="shrink-0 text-coral">press a combination&ensp;esc cancels</output>
+        <output className={unspellable ? 'shrink-0 text-red' : 'shrink-0 text-coral'}>
+          {unspellable
+            ? 'corral cannot spell that key\u2002try another'
+            : 'press a combination\u2002esc cancels'}
+        </output>
       )}
     </span>
   )

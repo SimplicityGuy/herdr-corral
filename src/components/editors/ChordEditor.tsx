@@ -21,7 +21,7 @@
  */
 import { KeyChordInput } from '@/components/common/KeyChordInput'
 import { type EditorProps, registerEditor } from '@/components/shell/editor-registry'
-import { navigateRejection, parseChord } from '@/model/keys'
+import { bindingProblem, isNavigateAction } from '@/lib/keybindings'
 import { bindingValues } from '@/model/validate'
 import { useState } from 'react'
 
@@ -31,13 +31,6 @@ function isChordKey(path: string): boolean {
   if (path.startsWith('keys.indexed.')) return false
   if (path.startsWith('keys.command')) return /^keys\.command\[\d+]\.key$/.test(path)
   return true
-}
-
-/** Navigate mode's own refusal, or `null` when the chord is fine here. */
-function rejectionOf(path: string, text: string): string | null {
-  if (!path.startsWith('keys.navigate_')) return null
-  const chord = parseChord(text.trim())
-  return chord === null ? null : navigateRejection(chord)
 }
 
 export function ChordEditor({ path, value, diagnostics, commit, cancel }: EditorProps) {
@@ -60,12 +53,12 @@ export function ChordEditor({ path, value, diagnostics, commit, cancel }: Editor
     )
   }
 
-  const rejection = rejectionOf(path, draft)
+  const problem = bindingProblem(path, draft)
   const empty = draft.trim() === ''
 
   function apply(next: string): void {
     setDraft(next)
-    if (next.trim() === '' || rejectionOf(path, next) !== null) return
+    if (next.trim() === '' || bindingProblem(path, next) !== null) return
     commit(next.trim())
   }
 
@@ -77,7 +70,7 @@ export function ChordEditor({ path, value, diagnostics, commit, cancel }: Editor
         onChange={setDraft}
         onRecord={apply}
         onCommit={apply}
-        allowPrefix={!path.startsWith('keys.navigate_')}
+        allowPrefix={!isNavigateAction(path)}
       />
       {diagnostics.map((diagnostic) => (
         <p
@@ -88,11 +81,11 @@ export function ChordEditor({ path, value, diagnostics, commit, cancel }: Editor
           {diagnostic.message}
         </p>
       ))}
-      {rejection !== null && <p className="text-red">{`● ${rejection}`}</p>}
+      {problem !== null && <p className="text-red">{`● ${problem}`}</p>}
       <p className="text-overlay0">record, or type&ensp;&ensp;enter apply&ensp;&ensp;esc cancel</p>
       <button
         type="button"
-        disabled={empty || rejection !== null}
+        disabled={empty || problem !== null}
         onClick={() => apply(draft)}
         className="self-start bg-surface0 px-2 text-text disabled:text-overlay0"
       >

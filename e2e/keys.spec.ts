@@ -1,10 +1,25 @@
-import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import { type Page, expect, test } from '@playwright/test'
 
 /**
  * The mode badge, addressed exactly: `copy_mode` and `resize_mode` are rows on
  * this screen, and a substring match would find them too.
  */
 const MODE = { exact: true } as const
+
+/**
+ * The file corral would hand the user, read back through the real download.
+ *
+ * Asserting the UI values proves the editor agrees with itself; only the bytes
+ * of `:w` prove it agrees with herdr, which is what a config file is for.
+ */
+async function downloadedConfig(page: Page): Promise<string> {
+  const saving = page.waitForEvent('download')
+  await page.getByRole('button', { name: /download config\.toml/ }).click()
+  const download = await saving
+  const file = await download.path()
+  return readFile(file, 'utf8')
+}
 
 /**
  * The keybindings editor, walked the way ADR-0002 says the shell is driven:
@@ -95,9 +110,49 @@ test('a custom command is added, typed and written as a [[keys.command]] block',
   await page.getByRole('textbox', { name: 'keys.command[0].width' }).fill('80%')
   await page.getByRole('textbox', { name: 'keys.command[0].width' }).press('Enter')
 
+  await page.getByRole('textbox', { name: 'keys.command[0].key' }).fill('prefix+t')
+  await page.getByRole('textbox', { name: 'keys.command[0].key' }).press('Enter')
+
   await expect(page.getByRole('textbox', { name: 'keys.command[0].width' })).toHaveValue('80%')
   await expect(page.getByRole('textbox', { name: 'keys.command[1].command' })).toBeHidden()
 
+  const written = await downloadedConfig(page)
+  expect(written).toContain('[[keys.command]]')
+  expect(written).toContain('key = "prefix+t"')
+  expect(written).toContain('type = "popup"')
+  expect(written).toContain('command = "htop"')
+  expect(written).toContain('width = "80%"')
+
   await page.getByRole('button', { name: 'remove keys.command[0]' }).click()
   await expect(page.getByText(/none yet/)).toBeVisible()
+  expect(await downloadedConfig(page)).not.toContain('[[keys.command]]')
+})
+
+test('the prefix+ toggle reaches the file, not just the field', async ({ page }) => {
+  await page.goto('/')
+  await page.keyboard.press('4')
+
+  await page.getByRole('checkbox', { name: 'prefix+ for keys.remote_image_paste' }).check()
+
+  await expect(page.getByRole('textbox', { name: 'keys.remote_image_paste' })).toHaveValue(
+    'prefix+ctrl+v',
+  )
+  await expect(
+    page.getByRole('button', { name: 'keys.remote_image_paste = prefix+ctrl+v' }),
+  ).toBeVisible()
+  expect(await downloadedConfig(page)).toContain('remote_image_paste = "prefix+ctrl+v"')
+})
+
+test('a chord typed and left behind is still written', async ({ page }) => {
+  await page.goto('/')
+  await page.keyboard.press('4')
+
+  const field = page.getByRole('textbox', { name: 'keys.help' })
+  await field.fill('prefix+f1')
+  // No enter: the user types and clicks elsewhere, which is where the value
+  // used to be lost.
+  await page.getByRole('button', { name: 'reset keys.settings' }).click()
+
+  await expect(page.getByRole('button', { name: 'keys.help = prefix+f1' })).toBeVisible()
+  expect(await downloadedConfig(page)).toContain('help = "prefix+f1"')
 })
