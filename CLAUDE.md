@@ -79,9 +79,31 @@ pnpm test:e2e         # Playwright against the built app on :4173 (separate from
 | `test:watch` | `vitest` in watch mode |
 | `test:e2e` | `playwright test`; builds and previews `dist/` itself |
 | `check` | typecheck → lint → test → build |
-| `gen:reference` | regenerates `src/schema/reference.json` from herdr.dev (placeholder until the schema bead lands) |
+| `gen:reference` | regenerates `src/schema/reference.json` from herdr.dev; `--offline` parses the committed fixture instead |
 
-`check` deliberately excludes e2e so the inner loop stays fast. CI runs both.
+`check` deliberately excludes e2e so the inner loop stays fast. CI runs both. Unit tests come
+from `src/**` and `scripts/**`, so the schema generator is covered by the same gate as the app.
+
+### Refreshing the generated schema
+
+The three files under `src/schema/` are generated and must never be hand-edited. A herdr
+upgrade is a regenerate-and-diff:
+
+```bash
+pnpm gen:reference                       # src/schema/reference.json, from herdr.dev
+pnpm gen:reference --update-fixture      # ... and refresh scripts/fixtures/config-reference.html
+herdr --default-config > src/schema/default-config.toml
+```
+
+`reference.json` is deterministic: re-running against an unchanged page leaves the tree clean.
+The generator fails rather than writing a thin file if the page yields fewer than 150 settings,
+so a site redesign is noticed. The fixture backs `--offline` and the parser's unit test, and is
+only rewritten when you ask for it, because the page carries build-hash noise.
+
+`src/schema/themes.json` is lifted from herdr's own source — `src/app/state.rs` (`impl Palette`)
+and `src/config/theme.rs` (`THEME_NAMES`, `CustomThemeColors`) at the release tag, cited in the
+file's `source` field. Re-derive it from the new tag on a herdr bump; a palette that cannot be
+sourced is marked `"approximate": true` rather than invented.
 
 **nvm caveat.** The operator's zsh profile lazy-loads nvm and recurses in non-interactive
 shells: `node` and `pnpm` print `_nvm_load: command not found` until the stack overflows. When
@@ -106,7 +128,7 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 
 | Path | Owns |
 | --- | --- |
-| `src/schema/` *(planned)* | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, accessors |
+| `src/schema/` | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, shared types and typed accessors |
 | `src/model/` *(planned)* | paths, TOML value formatting, the comment-preserving patcher (`toml-doc.ts`), parse, chord grammar, validation, export |
 | `src/store/` *(planned)* | zustand: original text, parsed values, edits, effective config, undo/redo, selection, section |
 | `src/components/preview/` *(planned)* | `HerdrPreview`, sample data, the region → keys map |
@@ -117,7 +139,7 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `src/lib/` | `cn` and other cross-cutting helpers |
 | `src/test/` | vitest setup (jest-dom matchers, cleanup) |
 | `e2e/` | Playwright specs, run against `dist/` |
-| `scripts/` | `gen-reference.ts` and other build-time generators |
+| `scripts/` | `gen-reference.ts`, its parser and fixture, and other build-time generators |
 
 `src/App.tsx` currently holds a **static placeholder** of the Console chrome. The shell bead
 replaces the contents of its regions; it should not invent a different structure.
@@ -134,7 +156,9 @@ Every bead preserves these, and tests enforce them:
 2. **Only changed leaves are written.** An explicit value equal to the default is still
    written; "reset" removes the key.
 3. **The schema is generated, never hand-edited.** `schema.test.ts` cross-checks
-   `reference.json` against `default-config.toml`.
+   `reference.json` against `default-config.toml` in both directions. Neither file is a superset
+   of the other, so each direction carries a named exceptions list, and an entry that has stopped
+   being an exception fails just as loudly as a new gap.
 4. **Validation mirrors herdr**: 16 rows × 16 tokens, `tab_bar_right` entries ≤ 16, chord
    grammar, navigate-mode restrictions, color syntax, enum sets, integer ranges.
 5. **Every schema key belongs to exactly one UI home** (`sections.test.ts`).
