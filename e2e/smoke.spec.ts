@@ -151,10 +151,52 @@ for (const width of [960, 1020, 1280]) {
   })
 }
 
+/**
+ * "The preview is the editor" (ADR-0002), walked once end to end: click a region
+ * of the herdr mock, get the popover for the key that draws it, leave with esc.
+ */
+test('clicking an agent row in the preview edits the rows that draw it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 820 })
+  await page.goto('/')
+
+  const preview = page.getByRole('region', { name: /^preview/ })
+  const row = preview.getByRole('button', { name: 'agent claude' })
+  await expect(row).toBeVisible()
+  await row.click()
+
+  const popover = page.getByRole('dialog', { name: 'ui.sidebar.agents.rows' })
+  await expect(popover).toBeVisible()
+  await expect(popover).toContainText('┤ ui.sidebar.agents.rows ├')
+  // The tree's cursor followed the click: the shell switched to the section that
+  // owns the key, and the row for it is the focused one.
+  await expect(page.getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: '[2] sidebar' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('button', { name: 'ui.sidebar.agents.rows = 2' })).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(popover).toBeHidden()
+  // The selection outlives the popover: the region keeps the coral outline and
+  // the tree keeps the cursor, which is where the shell puts the focus back.
+  await expect(row).toHaveAttribute('data-selected', 'true')
+  await expect(page.getByRole('button', { name: 'ui.sidebar.agents.rows = 2' })).toBeFocused()
+})
+
 test('the shell matches the reference at 1280x820', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await page.goto('/')
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
+
+  // The mock's anatomy, as console-direction.html draws it: a tab row with its
+  // right-hand entries, the Spaces and Agents panels, two panes with `┤ ├`
+  // captions, and the toast in its corner.
+  const preview = page.getByRole('region', { name: /^preview/ })
+  await expect(preview.getByRole('button', { name: 'tab bar', exact: true })).toBeVisible()
+  await expect(preview.getByRole('button', { name: 'tab bar status entries' })).toBeVisible()
+  await expect(preview.getByText('SPACES')).toBeVisible()
+  await expect(preview.getByText('AGENTS')).toBeVisible()
+  await expect(preview.getByRole('button', { name: /^pane / })).toHaveCount(2)
+  await expect(preview.getByText('┤ zsh ├')).toBeVisible()
+  await expect(preview.getByRole('button', { name: /notification toast/ })).toBeVisible()
 
   await page.screenshot({ path: 'test-results/console-shell.png' })
 })

@@ -5,11 +5,11 @@
  * The visual contract is docs/design/console-direction.html; the tokens are in
  * src/index.css, and this file uses those and nothing else.
  *
- * The centre frame is a placeholder until the preview bead fills it. Everything
- * that bead needs is already here: `useShellStore.openEditor` anchors an editor to
- * a region, `selection.region` records which region is selected, and the popover
- * renders whatever `registerEditor` has claimed the key.
+ * The centre frame holds the herdr mock: `HerdrPreview` reads the effective
+ * config and opens an editor for whichever region is clicked, through the same
+ * `useShellStore.openEditor` the tree uses.
  */
+import { HerdrPreview } from '@/components/preview/HerdrPreview'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
 import { InlinePopover } from '@/components/shell/InlinePopover'
@@ -29,13 +29,7 @@ export default function App() {
           <SettingsTree />
 
           <Panel caption="preview · click anything to edit it">
-            <div className="m-[10px] flex flex-1 items-center justify-center bg-base text-[12px] text-overlay0">
-              <p className="max-w-[46ch] text-center">
-                The herdr mock lands here. Load a <span className="text-subtext0">config.toml</span>{' '}
-                or start from herdr&rsquo;s defaults, then click any region to edit the keys that
-                draw it.
-              </p>
-            </div>
+            <HerdrPreview />
           </Panel>
         </div>
 
