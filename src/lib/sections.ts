@@ -37,7 +37,12 @@ export type UiSection = (typeof UI_SECTIONS)[number]
 export const DEFAULT_UI_SECTION: UiSection = 'layout'
 
 /**
- * One claim on a key: an exact path, or a dotted prefix ending in `.` or `_`.
+ * One claim on a key: an exact path, or a plain string prefix of one.
+ *
+ * A prefix is matched with `startsWith` and is not required to end at a path
+ * separator: `ui.sidebar` claims both `ui.sidebar_width` and
+ * `ui.sidebar.agents.rows`, and `ui.tab_bar` claims `ui.tab_bar_right`. That is
+ * the point — herdr spells one region's settings two ways.
  *
  * Prefixes are spelt out rather than inferred from the TOML tree, because herdr's
  * tree does not group by editor: `ui.sidebar_width` and `ui.sidebar.agents.rows`

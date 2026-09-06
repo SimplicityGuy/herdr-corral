@@ -12,6 +12,16 @@
  * been changing a draft rather than the store, and putting it here is what makes
  * it mean the same thing in every editor a later bead writes.
  *
+ * "Exactly one of `commit` or `cancel`" is enforced rather than asked for: the
+ * first of them to be called resolves the popover and every later call is ignored,
+ * and an editor that is torn down having called neither has cancelled, because
+ * `commit` is the only path that writes.
+ *
+ * **Dismissal does not depend on the editor.** The `esc` listener sits on the
+ * document, not on the frame, and a pointer press outside the frame cancels too.
+ * An editor with nothing focusable in it — the note shown for a value that is a
+ * whole structure — is still a popover the user can leave.
+ *
  * Focus is trapped while it is open and returns to the element that opened it on
  * close. That is not decoration: the popover is anchored to a tree row the user
  * was standing on, and losing the row means losing the place in a 167-key list.
@@ -24,7 +34,7 @@ import { POPOVER_WIDTH, placeAt } from '@/lib/popover'
 import type { TomlValue } from '@/model/parse'
 import { useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
-import { createElement, useEffect, useRef } from 'react'
+import { createElement, useCallback, useEffect, useRef } from 'react'
 
 /** Everything focus can land on inside the frame. */
 const FOCUSABLE =
@@ -37,40 +47,79 @@ export function InlinePopover() {
   const diagnostics = useDiagnostics()
   const frameRef = useRef<HTMLDialogElement>(null)
 
+  /**
+   * Settle the popover once. `write` is the commit; its absence is the cancel.
+   *
+   * The open editor in the store is the latch: `closeEditor` clears it, so the
+   * second of a `commit`/`cancel` pair finds nothing open and does nothing. That
+   * is what makes "exactly one of them" a property of the host rather than a rule
+   * every future editor has to remember.
+   */
+  const finish = useCallback(
+    (write?: () => void) => {
+      if (useShellStore.getState().editor === null) return
+      write?.()
+      closeEditor()
+    },
+    [closeEditor],
+  )
+
   // Take focus on open, and hand it back on close. The restore is the effect's
-  // cleanup rather than part of `close`, so it happens however the popover goes
+  // cleanup rather than part of `finish`, so it happens however the popover goes
   // away — `esc`, an applied edit, or a section switch that clears it.
   useEffect(() => {
     if (target === null) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    frameRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+    const frame = frameRef.current
+    // An editor may have nothing focusable in it; the frame itself is then the
+    // focus holder, which is what keeps `esc` and `tab` working inside it.
+    const first = frame?.querySelector<HTMLElement>(FOCUSABLE) ?? frame
+    first?.focus()
     return () => opener?.focus()
   }, [target])
 
-  // `esc` cancels; `tab` wraps rather than escaping into the shell behind.
+  // `esc` cancels from anywhere, `tab` wraps rather than escaping into the shell
+  // behind, and a press outside the frame cancels. All three are on the document,
+  // so none of them depends on the editor having taken focus.
   useEffect(() => {
-    const frame = frameRef.current
-    if (target === null || frame === null) return
+    if (target === null) return
     function onKeyDown(event: KeyboardEvent) {
+      const frame = frameRef.current
       if (frame === null) return
       if (event.key === 'Escape') {
         event.preventDefault()
-        closeEditor()
+        finish()
         return
       }
       if (event.key !== 'Tab') return
       const focusable = [...frame.querySelectorAll<HTMLElement>(FOCUSABLE)]
-      if (focusable.length === 0) return
+      if (focusable.length === 0) {
+        // Nothing to move between: keep focus on the frame rather than letting
+        // tab walk into the shell the popover is sitting on top of.
+        event.preventDefault()
+        frame.focus()
+        return
+      }
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
       const edge = event.shiftKey ? first : last
-      if (document.activeElement !== edge) return
+      if (document.activeElement !== edge && frame.contains(document.activeElement)) return
       event.preventDefault()
       ;(event.shiftKey ? last : first).focus()
     }
-    frame.addEventListener('keydown', onKeyDown)
-    return () => frame.removeEventListener('keydown', onKeyDown)
-  }, [target, closeEditor])
+    function onPointerDown(event: PointerEvent) {
+      const frame = frameRef.current
+      if (frame === null || !(event.target instanceof Node)) return
+      if (frame.contains(event.target)) return
+      finish()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('pointerdown', onPointerDown)
+    }
+  }, [target, finish])
 
   if (target === null) return null
 
@@ -82,17 +131,21 @@ export function InlinePopover() {
   })
 
   function commit(next: TomlValue) {
-    setKey(path, next)
-    closeEditor()
+    finish(() => setKey(path, next))
+  }
+
+  function cancel() {
+    finish()
   }
 
   return (
     <dialog
       ref={frameRef}
       open
+      tabIndex={-1}
       aria-label={caption}
       style={{ left, top, width: POPOVER_WIDTH }}
-      className="fixed z-50 m-0 flex flex-col gap-[6px] border border-coral bg-mantle px-3 py-[10px] text-text shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
+      className="fixed z-50 m-0 flex flex-col gap-[6px] border border-coral bg-mantle px-3 py-[10px] text-text shadow-[0_10px_30px_rgba(0,0,0,0.5)] outline-none"
     >
       <div className="text-coral">{`┤ ${caption} ├`}</div>
       {/* The editor is looked up, not written here, so it is built with
@@ -105,7 +158,7 @@ export function InlinePopover() {
         value: effective.get(path),
         diagnostics: diagnosticsAt(diagnostics, path),
         commit,
-        cancel: closeEditor,
+        cancel,
       })}
     </dialog>
   )

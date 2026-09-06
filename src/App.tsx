@@ -15,8 +15,9 @@ import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
 import { InlinePopover } from '@/components/shell/InlinePopover'
 import { Panel } from '@/components/shell/Panel'
 import { SettingsTree } from '@/components/shell/SettingsTree'
-import { FILE_NAME, TopLine } from '@/components/shell/TopLine'
+import { TopLine } from '@/components/shell/TopLine'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { FILE_NAME } from '@/lib/download'
 
 export default function App() {
   return (

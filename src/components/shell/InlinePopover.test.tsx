@@ -3,7 +3,7 @@ import { InlinePopover } from '@/components/shell/InlinePopover'
 import { SettingsTree } from '@/components/shell/SettingsTree'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -161,6 +161,89 @@ describe('InlinePopover', () => {
 
     expect(screen.getByText(/edited by its own form/)).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    'ui.sidebar.agents.rows',
+    'ui.sidebar.agents.rows_by_agent',
+    'ui.sidebar.spaces.rows',
+    'ui.tab_bar_right',
+    'experimental.cjk_ime_agents',
+  ])('closes %s on esc, though its editor has no field to focus', async (key) => {
+    const user = userEvent.setup()
+    open(key)
+    render(<InlinePopover />)
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(useConfigStore.getState().isDirty()).toBe(false)
+  })
+
+  it('offers a control to leave a structured editor, for the pointer as well', async () => {
+    const user = userEvent.setup()
+    open('ui.tab_bar_right')
+    render(<InlinePopover />)
+
+    await user.click(screen.getByRole('button', { name: 'esc close' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps focus inside a structured editor rather than letting tab escape', async () => {
+    const user = userEvent.setup()
+    open('ui.tab_bar_right')
+    render(
+      <>
+        <button type="button">outside</button>
+        <InlinePopover />
+      </>,
+    )
+
+    await user.tab()
+
+    expect(screen.getByRole('button', { name: 'outside' })).not.toHaveFocus()
+    const focused = document.activeElement
+    expect(focused).toBeInstanceOf(HTMLElement)
+    expect(screen.getByRole('dialog')).toContainElement(focused as HTMLElement)
+  })
+
+  it('cancels when the pointer goes down outside the frame', async () => {
+    const user = userEvent.setup()
+    open('ui.sidebar_width')
+    render(
+      <>
+        <button type="button">outside</button>
+        <InlinePopover />
+      </>,
+    )
+
+    const field = screen.getByRole('spinbutton', { name: 'ui.sidebar_width' })
+    await user.clear(field)
+    await user.type(field, '99')
+    await user.click(screen.getByRole('button', { name: 'outside' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(useConfigStore.getState().effective('ui.sidebar_width')).toBe(26)
+  })
+
+  it('settles once: only the first of commit and cancel is heard', () => {
+    let props: { commit(value: number): void; cancel(): void } | null = null
+    registerEditor('ui.sidebar_width', (given) => {
+      props = given as unknown as typeof props
+      return <p>stub</p>
+    })
+    open('ui.sidebar_width')
+    render(<InlinePopover />)
+
+    act(() => props?.commit(42))
+    // A second write and a late cancel both arrive after the popover settled.
+    act(() => props?.commit(7))
+    act(() => props?.cancel())
+
+    expect(useConfigStore.getState().effective('ui.sidebar_width')).toBe(42)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows what validate() says about the key being edited', () => {

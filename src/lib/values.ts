@@ -29,10 +29,14 @@ function isTable(value: TomlValue): value is Record<string, TomlValue> {
  * The one-line rendering of a value.
  *
  * Strings come back unquoted, as the mockup shows them (`top`, `catppuccin`,
- * `ctrl+b`) and verbatim, as this module's docstring requires.
+ * `ctrl+b`) and verbatim, as this module's docstring requires. The one string
+ * that is quoted is the empty one, which has nothing to show otherwise.
  */
 export function formatValue(value: TomlValue | undefined): string {
   if (value === undefined || value === null) return UNSET
+  // An empty string is a value herdr accepts and a row has to show it, or the
+  // accessible name trails off into nothing: `ui.window_title = `.
+  if (value === '') return '""'
   if (typeof value === 'string') return value
   if (typeof value === 'boolean' || typeof value === 'number') return String(value)
   if (value instanceof Date) return value.toISOString()

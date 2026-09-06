@@ -1,4 +1,5 @@
-import { BLOCKED_REASON, DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
+import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
+import { BLOCKED_REASON } from '@/lib/download'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'

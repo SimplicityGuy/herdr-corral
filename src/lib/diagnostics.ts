@@ -32,7 +32,6 @@ export interface DiagnosticSummary {
   readonly warnings: number
   /** The first warning in path order, whose text the line prints. */
   readonly firstWarning: Diagnostic | undefined
-  readonly firstError: Diagnostic | undefined
 }
 
 const cache = new WeakMap<ConfigValues, readonly Diagnostic[]>()
@@ -55,17 +54,15 @@ export function summarize(diagnostics: readonly Diagnostic[]): DiagnosticSummary
   let errors = 0
   let warnings = 0
   let firstWarning: Diagnostic | undefined
-  let firstError: Diagnostic | undefined
   for (const diagnostic of diagnostics) {
     if (diagnostic.severity === 'error') {
       errors += 1
-      firstError ??= diagnostic
     } else {
       warnings += 1
       firstWarning ??= diagnostic
     }
   }
-  return { errors, warnings, firstWarning, firstError }
+  return { errors, warnings, firstWarning }
 }
 
 /** The diagnostics at one path, and at the paths inside it. */

@@ -11,33 +11,12 @@
  */
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { summarize, useDiagnostics } from '@/lib/diagnostics'
+import { BLOCKED_REASON, FILE_NAME, downloadConfig } from '@/lib/download'
 import { changedLeaves, useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
 import { useState } from 'react'
 
-/** Why the download is refused. Shown as the tooltip and as the accessible description. */
-export const BLOCKED_REASON =
-  'herdr ignores a config file it cannot read and starts on defaults; fix the errors first'
-
-/**
- * Hand the current config to the browser as a file.
- *
- * A first cut: the io bead replaces the button with the export dialog (download,
- * copy, snippet, diff). It lives here rather than nowhere because a verb the top
- * line advertises should do the thing it names, and `exportText()` already is the
- * whole answer — the patcher decides whether that is the original bytes with a few
- * lines changed or a freshly written file.
- */
-function download(text: string, name: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/toml' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-export function DiagnosticsLine({ fileName = 'config.toml' }: { fileName?: string }) {
+export function DiagnosticsLine({ fileName = FILE_NAME }: { fileName?: string }) {
   const mode = useShellStore((state) => state.mode)
   const diagnostics = useDiagnostics()
   const changed = useConfigStore(changedLeaves)
@@ -85,7 +64,7 @@ export function DiagnosticsLine({ fileName = 'config.toml' }: { fileName?: strin
         </span>
 
         <span className="ml-auto shrink-0 px-3 text-subtext0">
-          {changed.length} keys changed
+          {changed.length} {changed.length === 1 ? 'key' : 'keys'} changed
         </span>
         <button
           type="button"
@@ -104,7 +83,7 @@ export function DiagnosticsLine({ fileName = 'config.toml' }: { fileName?: strin
                 type="button"
                 disabled={blocked}
                 title={blocked ? BLOCKED_REASON : undefined}
-                onClick={() => download(useConfigStore.getState().exportText(), fileName)}
+                onClick={() => downloadConfig(fileName)}
                 className="flex h-diagnostics items-center bg-surface0 px-3 text-text disabled:text-overlay0"
               >
                 {`:w  download ${fileName}`}

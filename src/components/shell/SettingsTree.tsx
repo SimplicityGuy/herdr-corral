@@ -18,8 +18,8 @@
  * The shortcuts are attached to the document in an effect rather than through an
  * `onKeyDown` on the panel. The panel is a container, and giving a container a
  * keyboard handler is what the a11y rules forbid; `/` has to work from anywhere in
- * the shell anyway, and the rest are scoped by asking whether the event came from
- * inside the panel.
+ * the shell anyway, and the rest are scoped to events that came from inside the
+ * panel — or from nowhere at all, which is where the focus sits on a fresh load.
  */
 import { Panel } from '@/components/shell/Panel'
 import { isBareShortcut } from '@/components/shell/keyboard'
@@ -82,8 +82,15 @@ export function SettingsTree() {
         filterRef.current?.select()
         return
       }
+      // Inside the tree, or nowhere in particular. On a fresh load the focus is
+      // on `body`, and a TUI whose `j` does nothing until you have clicked
+      // something is not a TUI; the first `j` then moves the row and the effect
+      // above pulls the focus onto it.
       const panel = panelRef.current
-      if (panel === null || !(event.target instanceof Node) || !panel.contains(event.target)) return
+      const target = event.target
+      const loose = target === document.body || target === document.documentElement
+      if (panel === null && !loose) return
+      if (!loose && (!(target instanceof Node) || panel === null || !panel.contains(target))) return
       if (event.key === 'j' || event.key === 'ArrowDown') {
         event.preventDefault()
         move(1)

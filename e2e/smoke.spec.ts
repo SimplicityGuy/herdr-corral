@@ -47,12 +47,16 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
   // `/` filters the tree.
   await page.keyboard.press('/')
   await expect(page.getByRole('searchbox', { name: 'Filter settings' })).toBeFocused()
-  await page.keyboard.type('sidebar_')
+  // `ui.sidebar_` rather than `sidebar_`, so the first row is the one the rest of
+  // the walk expects: a bare `sidebar_` also matches `theme.custom.sidebar_bg`,
+  // and the reference page lists theme before ui.
+  await page.keyboard.type('ui.sidebar_')
   await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeVisible()
   await expect(page.getByRole('button', { name: /^theme\.name/ })).toHaveCount(0)
 
-  // j/k move the row cursor.
-  await page.getByRole('button', { name: 'ui.sidebar_width = 26' }).focus()
+  // tab leaves the filter for the tree, and j/k move the row cursor from there.
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
   await page.keyboard.press('j')
   await expect(page.getByRole('button', { name: /^ui\.sidebar_min_width/ })).toBeFocused()
   await page.keyboard.press('k')
@@ -72,10 +76,10 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
   await page.keyboard.type('34')
   await page.keyboard.press('Enter')
   await expect(page.getByRole('button', { name: 'ui.sidebar_width = 34' })).toBeVisible()
-  await expect(page.getByText('1 keys changed')).toBeVisible()
+  await expect(page.getByText('1 key changed')).toBeVisible()
 
-  // u undoes it.
-  await page.getByRole('button', { name: 'ui.sidebar_width = 34' }).focus()
+  // u undoes it. Focus is already back on the row the popover was anchored to.
+  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 34' })).toBeFocused()
   await page.keyboard.press('u')
   await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeVisible()
   await expect(page.getByText('0 keys changed')).toBeVisible()
@@ -94,18 +98,58 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
 test('the download is refused while the config has an error', async ({ page }) => {
   await page.goto('/')
 
-  // `ui.window_title` takes a string herdr can expand; a lone `{` is not one.
+  // 99999 is past herdr's u16 ceiling, so its deserializer rejects the file and
+  // herdr would start on defaults — an error, not a warning.
   await page.keyboard.press('6')
   await page.keyboard.press('/')
-  await page.keyboard.type('sidebar_min_width')
-  await page.getByRole('button', { name: /^ui\.sidebar_min_width/ }).focus()
+  await page.keyboard.type('sidebar_width')
+  await page.keyboard.press('Tab')
   await page.keyboard.press('Enter')
   await page.keyboard.press('ControlOrMeta+a')
-  await page.keyboard.type('999')
+  await page.keyboard.type('99999')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText(/warning/)).toContainText('sidebar')
+  await expect(page.getByText(/1 error/)).toBeVisible()
+  const download = page.getByRole('button', { name: /download config\.toml/ })
+  await expect(download).toBeDisabled()
+  await expect(download).toHaveAccessibleDescription(
+    'herdr ignores a config file it cannot read and starts on defaults; fix the errors first',
+  )
 })
+
+/**
+ * ADR-0002 gives the top line 30px and asks the shell to hold together down to
+ * 960 wide. The switches are the line's job, so they never wrap; the hints give
+ * way instead.
+ */
+for (const width of [960, 1020, 1280]) {
+  test(`the top line stays one 30px row at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 820 })
+    await page.goto('/')
+
+    const header = page.getByRole('banner')
+    await expect(header).toBeVisible()
+    expect((await header.boundingBox())?.height).toBe(30)
+
+    const nav = page.getByRole('navigation', { name: 'Sections' })
+    const navBox = await nav.boundingBox()
+    expect(navBox?.height).toBeLessThanOrEqual(30)
+
+    // Every switch is still on the line, and none of them has spilled past it.
+    for (const label of ['[1] layout', '[6] all']) {
+      const box = await nav.getByRole('button', { name: label }).boundingBox()
+      expect(box, `${label} must be laid out`).not.toBeNull()
+      expect(box!.y + box!.height).toBeLessThanOrEqual(30)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width)
+    }
+
+    // Nothing overflows the viewport horizontally.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
+}
 
 test('the shell matches the reference at 1280x820', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })

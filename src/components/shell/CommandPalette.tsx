@@ -5,6 +5,12 @@
  * section that owns the key, clears the filter that might hide it, and selects it.
  * The tree follows the selection, moves the DOM focus onto the row and puts the
  * user exactly where `j`/`k` and `enter` already work. Nothing else has to know.
+ *
+ * The jump waits for the dialog to close. Selecting first would move the focus
+ * onto a tree row while the dialog still has the rest of the page under
+ * `aria-hidden`, which is a focus inside hidden content — Chrome logs it and a
+ * screen reader would be looking at an element it has been told is not there. So
+ * the key is parked, the dialog closes, and an effect does the jump afterwards.
  */
 import {
   Command,
@@ -15,13 +21,15 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
+import { BLOCKED_REASON, FILE_NAME, downloadConfig } from '@/lib/download'
+import { summarize, useDiagnostics } from '@/lib/diagnostics'
 import { resetKey } from '@/lib/edit'
 import { UI_SECTIONS, homeOf } from '@/lib/sections'
 import { formatValue } from '@/lib/values'
 import { allKeys } from '@/schema'
 import { useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export function CommandPalette() {
   const open = useShellStore((state) => state.paletteOpen)
@@ -29,6 +37,9 @@ export function CommandPalette() {
   const setSection = useShellStore((state) => state.setSection)
   // Memoized on the edit map, so this is one map identity per document change.
   const effective = useConfigStore((state) => state.effectiveAll())
+  const blocked = summarize(useDiagnostics()).errors > 0
+  // The key a jump is waiting to land on, once the dialog is out of the way.
+  const pending = useRef<string | null>(null)
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -40,9 +51,16 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  function jumpTo(key: string) {
+  useEffect(() => {
+    const key = pending.current
+    if (open || key === null) return
+    pending.current = null
     setSection(homeOf(key))
     useConfigStore.getState().select({ key })
+  }, [open, setSection])
+
+  function jumpTo(key: string) {
+    pending.current = key
     setPaletteOpen(false)
   }
 
@@ -90,6 +108,14 @@ export function CommandPalette() {
               }
             >
               reset key to herdr&rsquo;s default
+            </CommandItem>
+            <CommandItem
+              value={`download ${FILE_NAME}`}
+              disabled={blocked}
+              onSelect={() => run(() => downloadConfig(FILE_NAME))}
+            >
+              <span>{`:w  download ${FILE_NAME}`}</span>
+              {blocked && <span className="ml-auto text-overlay0">{BLOCKED_REASON}</span>}
             </CommandItem>
             {UI_SECTIONS.map((section) => (
               <CommandItem

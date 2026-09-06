@@ -1,4 +1,5 @@
 import { CommandPalette } from '@/components/shell/CommandPalette'
+import { BLOCKED_REASON } from '@/lib/download'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'
 import { render, screen } from '@testing-library/react'
@@ -59,6 +60,27 @@ describe('CommandPalette', () => {
     await user.click(await screen.findByRole('option', { name: 'switch to keys' }))
 
     expect(useShellStore.getState().section).toBe('keys')
+  })
+
+  it('offers the download, and refuses it while an error stands', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), 'download')
+    expect(await screen.findByRole('option', { name: /download config\.toml/ })).not.toHaveAttribute(
+      'data-disabled',
+      'true',
+    )
+
+    await user.keyboard('{Escape}')
+    useConfigStore.getState().set('ui.sidebar_width', 'wide')
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), 'download')
+    const blocked = await screen.findByRole('option', { name: /download config\.toml/ })
+    expect(blocked).toHaveAttribute('data-disabled', 'true')
+    expect(blocked).toHaveTextContent(BLOCKED_REASON)
   })
 
   it('shows each setting with what it currently reads', async () => {

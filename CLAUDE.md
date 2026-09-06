@@ -136,8 +136,8 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `src/components/editors/` *(planned)* | `RowsEditor`, `StatusBarEditor`, `KeysEditor`, `ThemeEditor`, `SectionForm` |
 | `src/components/io/` *(planned)* | `Landing` (import), `ExportDialog` (download / copy / snippet / diff) |
 | `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
-| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts` |
-| `src/test/` | vitest setup (jest-dom matchers, cleanup) |
+| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts`, `download.ts` |
+| `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount |
 | `e2e/` | Playwright specs, run against `dist/` |
 | `scripts/` | `gen-reference.ts`, its parser and fixture, and other build-time generators |
 
@@ -169,6 +169,12 @@ import { useDiagnostics } from '@/lib/diagnostics'
   diagnostics line reads it; nothing else does.
 - **Read diagnostics.** `useDiagnostics()` returns the current `Diagnostic[]`, computed once per
   document and shared by the tree, the line and the popover. Do not call `validate()` again.
+
+The popover, not the editor, owns dismissal: `esc` is a document-level listener and a pointer
+press outside the frame cancels, so an editor with nothing focusable in it is still one the user
+can leave. `commit` and `cancel` settle it once — the open editor in the store is the latch, so
+whichever is called first wins and later calls are ignored. An editor torn down having called
+neither has cancelled, because `commit` is the only path that writes.
 
 `src/lib/sections.ts` is the map behind the six switches: `homeOf(key)` gives the one section
 that owns a key and `keysOf(section)` gives what the tree lists there. Adding an editor means

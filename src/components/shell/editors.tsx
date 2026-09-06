@@ -7,10 +7,12 @@
  * most of the config today, and it disappears key by key as the typed forms land
  * and claim their keys through `editor-registry.ts`.
  *
- * The four settings whose value is a whole structure — the sidebar token rows, the
- * tab bar's right side, the command list — have no one-line spelling and no
- * generic form. They say so and wait for the bead that owns them, rather than
- * offering a text field that would let someone paste a broken array into the file.
+ * The settings whose value is a whole structure — the sidebar token rows, the tab
+ * bar's right side, the CJK agent list — have no one-line spelling and no generic
+ * form. They say so and wait for the bead that owns them, rather than offering a
+ * text field that would let someone paste a broken array into the file. That
+ * branch still renders a control, because a popover with nothing focusable in it
+ * is one the keyboard cannot get into and therefore cannot leave.
  */
 import type { EditorProps } from '@/components/shell/editor-registry'
 import { parseDraft } from '@/lib/values'
@@ -33,7 +35,7 @@ const FIELD =
   'w-full border border-surface1 bg-base px-2 py-[2px] text-text outline-none focus:border-coral' +
   ' [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
-export function ValueEditor({ path, value, diagnostics, commit }: EditorProps) {
+export function ValueEditor({ path, value, diagnostics, commit, cancel }: EditorProps) {
   const declared = typeOf(path)
   const options = enumOptions(path)
   const [draft, setDraft] = useState(() => (value === undefined ? '' : String(value)))
@@ -46,7 +48,11 @@ export function ValueEditor({ path, value, diagnostics, commit }: EditorProps) {
           {declared} — edited by its own form, which arrives with a later bead.
         </p>
         <Messages diagnostics={diagnostics} />
-        <p className="text-overlay0">esc close</p>
+        {/* A popover with nothing focusable in it is a popover the keyboard
+            cannot leave, so the way out is a control rather than a hint. */}
+        <button type="button" onClick={cancel} className="self-start bg-surface0 px-2 text-text">
+          esc close
+        </button>
       </div>
     )
   }
