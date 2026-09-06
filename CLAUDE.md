@@ -130,20 +130,22 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | --- | --- |
 | `src/schema/` | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, shared types and typed accessors |
 | `src/model/` | `paths.ts`, `parse.ts`, `toml-value.ts`, the comment-preserving patcher `toml-doc.ts`, the leaf diff / patch-or-generate exporter `export.ts`, the chord grammar `keys.ts` and the diagnostics in `validate.ts` |
-| `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits, effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette |
+| `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits, effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette, the landing gate and which tab the export dialog is on |
 | `src/components/preview/` | `HerdrPreview` — the herdr mock, drawn from the effective config — with `sample.ts` (the session it draws), `tokens.ts` (the palette and the token rows) and `regions.ts` (the region → keys map behind click-to-edit) |
 | `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, the editor registry and the generic value editor |
 | `src/components/editors/` *(planned)* | `RowsEditor`, `StatusBarEditor`, `KeysEditor`, `ThemeEditor`, `SectionForm` |
-| `src/components/io/` *(planned)* | `Landing` (import), `ExportDialog` (download / copy / snippet / diff) |
+| `src/components/io/` | `Landing` — the first screen: drop / pick / paste / start from defaults, with the 1 MiB guard and the line-and-column parse error. `ExportDialog` — the full file and the changed hunks, with download / copy / install snippet and the two destructive verbs |
 | `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
-| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts`, `download.ts` |
+| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts`, `download.ts` (file / clipboard / install snippet), `diff.ts` (the unified diff the export dialog draws) |
 | `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount |
 | `e2e/` | Playwright specs, run against `dist/` |
-| `scripts/` | `gen-reference.ts`, its parser and fixture, and other build-time generators |
+| `scripts/` | `gen-reference.ts`, its parser and fixture, other build-time generators, and `no-network.test.ts` — the sweep of `src/` that holds ADR-0001's "no network calls at runtime" to its word |
 
-`src/App.tsx` assembles the Console chrome. Later beads fill the regions it lays out rather
-than inventing a new structure. The centre frame holds `HerdrPreview`; the editors a region
-opens are claimed through `registerEditor`, so a bead adds one without touching `App.tsx`.
+`src/App.tsx` assembles the Console chrome behind one branch: `Landing` owns the screen until a
+config is in hand (`useShellStore`'s `landing`), and the export dialog mounts beside the shell
+because both `:w` and the palette open it. Later beads fill the regions it lays out rather than
+inventing a new structure. The centre frame holds `HerdrPreview`; the editors a region opens are
+claimed through `registerEditor`, so a bead adds one without touching `App.tsx`.
 
 ### The shell's API
 
@@ -202,7 +204,9 @@ Every bead preserves these, and tests enforce them:
 5. **Every schema key belongs to exactly one UI home** — `src/lib/sections.ts`, enforced by
    `sections.test.ts`, which also fails a rule that no longer matches any key.
 6. **Download is blocked while diagnostics contain errors**, because herdr discards a file it
-   cannot deserialize and starts on defaults. `DiagnosticsLine` is where that is enforced.
+   cannot deserialize and starts on defaults. `DiagnosticsLine` refuses the `:w` door and
+   `ExportDialog` refuses the download and the install snippet behind it; `:diff` and a plain
+   copy of the text are never blocked, because reading what is wrong is what the user needs.
 7. **A value is shown as the user spelled it.** `normalizeChord('plus')` answers `'+'`, which
    `parseChord` does not read back, so the tree prints strings verbatim and only summarizes the
    shapes that have no one-line spelling — as a count, which nobody mistakes for the value.

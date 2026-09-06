@@ -46,6 +46,15 @@ import { create } from 'zustand'
  */
 export type Mode = 'EDIT' | 'DRAG' | 'RECORD'
 
+/**
+ * Which face of the export dialog is showing: the whole file, or the hunks.
+ *
+ * `null` is the dialog being shut, so one field answers both "is it open" and
+ * "on what", and the two doors into it — `:w` and `:diff` — differ only in the
+ * value they pass.
+ */
+export type ExportTab = 'file' | 'diff'
+
 /** Where a popover should sit: a viewport rectangle, as `getBoundingClientRect` gives. */
 export interface Anchor {
   readonly top: number
@@ -72,6 +81,16 @@ export interface ShellState {
   readonly filter: string
   readonly editor: EditorTarget | null
   readonly paletteOpen: boolean
+  /**
+   * True until a config is in the editor: the landing owns the screen first.
+   *
+   * A session that has not started and one that started from herdr's defaults are
+   * the same document — `source` is `'defaults'` either way — so the difference is
+   * not something the config store can be asked. It is a fact about what is on
+   * screen, which is this store's job.
+   */
+  readonly landing: boolean
+  readonly exportTab: ExportTab | null
 }
 
 export interface ShellActions {
@@ -84,6 +103,11 @@ export interface ShellActions {
   /** Close the popover. The value stays whatever the editor last applied. */
   closeEditor(): void
   setPaletteOpen(open: boolean): void
+  /** Leave the landing for the editor, or send the user back to it. */
+  setLanding(landing: boolean): void
+  /** Open the export dialog on one of its tabs. */
+  openExport(tab?: ExportTab): void
+  closeExport(): void
 }
 
 export type ShellStore = ShellState & ShellActions
@@ -102,6 +126,8 @@ export function initialShellState(): ShellState {
     filter: '',
     editor: null,
     paletteOpen: false,
+    landing: true,
+    exportTab: null,
   }
 }
 
@@ -134,6 +160,21 @@ export const useShellStore = create<ShellStore>()((write) => ({
 
   setPaletteOpen(open) {
     write({ paletteOpen: open })
+  },
+
+  setLanding(landing) {
+    // Going back to the landing takes the chrome's own overlays with it; leaving
+    // one open over a screen that no longer has a document behind it is a popover
+    // editing a key nobody can see.
+    write({ landing, editor: null, paletteOpen: false, exportTab: null })
+  },
+
+  openExport(tab = 'file') {
+    write({ exportTab: tab, paletteOpen: false })
+  },
+
+  closeExport() {
+    write({ exportTab: null })
   },
 }))
 

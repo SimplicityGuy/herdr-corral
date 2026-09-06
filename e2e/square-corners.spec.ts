@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { openConsole } from './console.ts'
 
 /**
  * ADR-0002 asks for square corners everywhere. Collapsing the `--radius-*`
@@ -21,7 +22,7 @@ const ESCAPES = [
 ]
 
 test('no rounded utility survives the square-corner rule', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
 
   const radii = await page.evaluate((classes) => {
     const probe = document.createElement('div')
@@ -41,7 +42,7 @@ test('no rounded utility survives the square-corner rule', async ({ page }) => {
 })
 
 test('rounded-[inherit] still propagates a parent radius', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
 
   const inherited = await page.evaluate(() => {
     const parent = document.createElement('div')

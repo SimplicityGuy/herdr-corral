@@ -80,16 +80,44 @@ describe('DiagnosticsLine', () => {
     expect(screen.getByText(/1 error/)).toBeInTheDocument()
   })
 
-  it('lists the changed keys behind :diff', async () => {
+  it('opens the export dialog on its diff tab from :diff', async () => {
     const user = userEvent.setup()
     useConfigStore.getState().set('ui.sidebar_width', 40)
     show()
 
-    expect(screen.queryByRole('region', { name: 'changed keys' })).not.toBeInTheDocument()
+    expect(useShellStore.getState().exportTab).toBeNull()
 
     await user.click(screen.getByRole('button', { name: ':diff' }))
 
-    const diff = screen.getByRole('region', { name: 'changed keys' })
-    expect(diff).toHaveTextContent('ui.sidebar_width')
+    expect(useShellStore.getState().exportTab).toBe('diff')
+  })
+
+  it('opens the export dialog on the file from :w', async () => {
+    const user = userEvent.setup()
+    show()
+
+    await user.click(screen.getByRole('button', { name: /download config\.toml/ }))
+
+    expect(useShellStore.getState().exportTab).toBe('file')
+  })
+
+  it('refuses to open the write door while an error stands', async () => {
+    const user = userEvent.setup()
+    makeAnError()
+    show()
+
+    await user.click(screen.getByRole('button', { name: /download config\.toml/ }))
+
+    expect(useShellStore.getState().exportTab).toBeNull()
+  })
+
+  it('always lets the diff through, error or not', async () => {
+    const user = userEvent.setup()
+    makeAnError()
+    show()
+
+    await user.click(screen.getByRole('button', { name: ':diff' }))
+
+    expect(useShellStore.getState().exportTab).toBe('diff')
   })
 })

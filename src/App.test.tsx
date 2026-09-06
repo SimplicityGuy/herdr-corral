@@ -1,12 +1,37 @@
 import { resetConfigStore } from '@/store/config'
-import { resetShellStore } from '@/store/shell'
+import { resetShellStore, useShellStore } from '@/store/shell'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 
 beforeEach(() => {
   resetConfigStore()
   resetShellStore()
+  // A fresh session lands on the import screen; the shell tests below are about
+  // what happens after it, so they start with a document already in hand.
+  useShellStore.getState().setLanding(false)
+})
+
+describe('App landing gate', () => {
+  it('opens on the landing, not the shell', () => {
+    useShellStore.getState().setLanding(true)
+    render(<App />)
+
+    expect(screen.getByRole('button', { name: /drop your config\.toml here/ })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'settings' })).not.toBeInTheDocument()
+  })
+
+  it('hands over to the shell once a config is in hand', async () => {
+    const user = userEvent.setup()
+    useShellStore.getState().setLanding(true)
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'start from herdr defaults' }))
+
+    expect(screen.getByRole('region', { name: 'settings' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /drop your config\.toml here/ })).not.toBeInTheDocument()
+  })
 })
 
 describe('App', () => {
