@@ -12,6 +12,8 @@
  * - `keysOf(section)` — the keys the settings tree lists for a section. For the five
  *   focused sections that is `homeOf`'s fibre; for `all` it is every key, because a
  *   view called "all" that hid two thirds of the config would be a lie.
+ * - `centreOf(section)` — which of the two centre frames that switch opens with,
+ *   which is a different question from what the tree is listing; see `CentreView`.
  *
  * `sections.test.ts` proves the partition, and also proves that every rule below
  * still matches a real key — a herdr release that renames `ui.pane_gaps` leaves a
@@ -35,6 +37,30 @@ export type UiSection = (typeof UI_SECTIONS)[number]
 
 /** The section the shell opens on. */
 export const DEFAULT_UI_SECTION: UiSection = 'layout'
+
+/**
+ * What the centre frame is showing: the herdr mock, or a section's own panel.
+ *
+ * Two orthogonal facts, deliberately: *which* section the tree and the top line
+ * are on, and *what* the centre draws. They were one fact while every section
+ * either had a panel or fell through to the preview, and clicking a region of
+ * the mock then took the mock off the screen — the region's own key belongs to a
+ * section with a panel, the section switched so the tree could follow, and the
+ * panel replaced what the user had just clicked on. Splitting them is what lets
+ * a region click move the tree without moving the eye.
+ */
+export type CentreView = 'preview' | 'section'
+
+/**
+ * The centre a switch opens with.
+ *
+ * `sidebar` is the mock — the sidebar is the thing the preview draws most of and
+ * the rows editor is a popover over it, not a panel. Every other switch has a
+ * panel of its own. A region click overrides this; see `openEditor`.
+ */
+export function centreOf(section: UiSection): CentreView {
+  return section === 'sidebar' ? 'preview' : 'section'
+}
 
 /**
  * One claim on a key: an exact path, or a plain string prefix of one.

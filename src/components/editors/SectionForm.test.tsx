@@ -1,11 +1,13 @@
 import { SectionForm } from '@/components/editors/SectionForm'
 import { resetConfigStore, useConfigStore } from '@/store/config'
+import { resetShellStore, useShellStore } from '@/store/shell'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 beforeEach(() => {
   resetConfigStore()
+  resetShellStore()
 })
 
 describe('SectionForm', () => {
@@ -32,18 +34,31 @@ describe('SectionForm', () => {
     expect(screen.getByLabelText('ui.sidebar_width')).toBeInTheDocument()
   })
 
-  it('gives keys.*, theme.custom.*, and the structured settings a fallback rather than a control', () => {
+  it('gives keys.*, the theme table, and the structured settings a row that opens their editor', () => {
     render(<SectionForm section="all" />)
 
+    // Not a `Field` — the proof is that nothing is labelled with the bare path.
     expect(screen.queryByLabelText('keys.help')).not.toBeInTheDocument()
-    const helpRow = screen.getByText('keys.help').closest('div')
-    expect(helpRow).toHaveTextContent('keybinding — edited by its own form')
+    const help = screen.getByRole('button', { name: 'keys.help: open editor' })
+    expect(help).toHaveTextContent('keybinding — edited by its own form')
 
-    expect(screen.queryByLabelText('theme.custom.accent')).not.toBeInTheDocument()
-    expect(screen.getByText('theme.custom.accent')).toBeInTheDocument()
+    for (const path of ['theme.custom.accent', 'ui.tab_bar_right', 'ui.sidebar.agents.rows']) {
+      expect(
+        screen.getByRole('button', { name: `${path}: open editor` }),
+        `expected a door to ${path}`,
+      ).toBeInTheDocument()
+    }
+  })
 
-    expect(screen.getByText('ui.tab_bar_right')).toBeInTheDocument()
-    expect(screen.getByText('ui.sidebar.agents.rows')).toBeInTheDocument()
+  it('opens that editor on the key the row names', async () => {
+    const user = userEvent.setup()
+    render(<SectionForm section="all" />)
+
+    await user.click(screen.getByRole('button', { name: 'theme.name: open editor' }))
+
+    // `all` listed the key and now reaches it: the popover host takes it from
+    // here, the same way it does for a tree row or a click on the preview.
+    expect(useShellStore.getState().editor?.key).toBe('theme.name')
   })
 
   it('hands the whole theme table and ui.accent to the theme editor', () => {

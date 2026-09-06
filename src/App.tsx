@@ -7,8 +7,9 @@
  *
  * The centre frame is one line per section — `CentreFrame` below. `SectionForm`
  * draws the two non-visual sections (`layout`, `all`), `KeysEditor` draws `keys`,
- * `StatusBarView` draws `status` and `ThemeView` draws `theme`; every other
- * section falls through to the herdr mock, which is the default:
+ * `StatusBarView` draws `status` and `ThemeView` draws `theme`; `sidebar` is the
+ * herdr mock, and so is any section while the shell's `centre` is pinned to the
+ * preview by a click on one of its regions:
  * `HerdrPreview` reads the effective config and opens an editor for whichever
  * region is clicked, through the same `useShellStore.openEditor` the tree uses.
  * That is also why the editor modules are imported here — for the keys they
@@ -70,9 +71,18 @@ export default function App() {
   )
 }
 
-/** What the centre column shows: one line per section, then the preview. */
+/**
+ * What the centre column shows.
+ *
+ * Two questions, asked in order. `centre` is *which frame* — the herdr mock, or
+ * the open section's own panel — and a click on a region of the mock pins it to
+ * the preview, so that clicking a thing never takes that thing off the screen.
+ * Only then does the section decide which panel: one line each.
+ */
 function CentreFrame() {
+  const centre = useShellStore((state) => state.centre)
   const section = useShellStore((state) => state.section)
+  if (centre === 'preview') return <PreviewFrame />
   switch (section) {
     case 'layout':
       return <SectionForm section="layout" />

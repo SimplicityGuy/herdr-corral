@@ -22,7 +22,9 @@
  *
  * `openEditor` also writes the config store's `selection`, so the preview's
  * "selected region" outline and the tree's focused row follow the popover without
- * either component knowing about the other. That is the one place the two stores
+ * either component knowing about the other. A target carrying a `region` also
+ * pins the centre frame to the preview, because a region click is a click on the
+ * mock and the mock has to still be there when the popover opens over it. That is the one place the two stores
  * touch, and it is deliberate: a caller should not have to remember to make two
  * calls to keep the shell coherent.
  *
@@ -33,7 +35,13 @@
  * the former and mirrors the latter into the config store via `primaryRefSection`,
  * so a bead reading `selection.section` still sees a reference section id.
  */
-import { DEFAULT_UI_SECTION, type UiSection, primaryRefSection } from '@/lib/sections'
+import {
+  type CentreView,
+  DEFAULT_UI_SECTION,
+  type UiSection,
+  centreOf,
+  primaryRefSection,
+} from '@/lib/sections'
 import { useConfigStore } from '@/store/config'
 import { create } from 'zustand'
 
@@ -76,6 +84,15 @@ export interface EditorTarget {
 
 export interface ShellState {
   readonly section: UiSection
+  /**
+   * What the centre frame draws: the herdr mock, or the open section's panel.
+   *
+   * Separate from `section` on purpose. A switch sets both — that is what
+   * picking a switch means — but a click on a region of the mock sets only the
+   * section, so the tree can follow the click without the mock disappearing out
+   * from under the popover that click just opened. See `openEditor`.
+   */
+  readonly centre: CentreView
   readonly mode: Mode
   /** The settings tree's `/` filter. Empty means "show the section". */
   readonly filter: string
@@ -94,11 +111,22 @@ export interface ShellState {
 }
 
 export interface ShellActions {
-  /** Switch sections, and point the config store's selection at the same place. */
+  /**
+   * Switch sections: the tree, the config store's selection, and the centre
+   * frame, which the switch chooses through `centreOf`.
+   */
   setSection(section: UiSection): void
   setMode(mode: Mode): void
   setFilter(filter: string): void
-  /** Open an editor popover for a key, selecting it in the config store. */
+  /**
+   * Open an editor popover for a key, selecting it in the config store.
+   *
+   * A target that names a `region` came from a click on the mock, and that
+   * keeps the mock on screen: the popover is anchored to the thing that was
+   * clicked, and replacing it with a section panel would leave the popover
+   * floating over a copy of its own controls. Everything else — a tree row, the
+   * palette — leaves the centre frame as it found it.
+   */
   openEditor(target: EditorTarget): void
   /** Close the popover. The value stays whatever the editor last applied. */
   closeEditor(): void
@@ -122,6 +150,7 @@ export function anchorOf(element: Element | null | undefined): Anchor {
 export function initialShellState(): ShellState {
   return {
     section: DEFAULT_UI_SECTION,
+    centre: centreOf(DEFAULT_UI_SECTION),
     mode: 'EDIT',
     filter: '',
     editor: null,
@@ -137,7 +166,7 @@ export const useShellStore = create<ShellStore>()((write) => ({
   setSection(section) {
     // The filter belongs to the section it was typed in; carrying it across would
     // open the next section on an empty tree with no visible reason why.
-    write({ section, filter: '', editor: null })
+    write({ section, centre: centreOf(section), filter: '', editor: null })
     useConfigStore.getState().setSection(primaryRefSection(section))
   },
 
@@ -150,7 +179,12 @@ export const useShellStore = create<ShellStore>()((write) => ({
   },
 
   openEditor(target) {
-    write({ editor: target, paletteOpen: false })
+    const fromRegion = target.region !== undefined
+    write({
+      editor: target,
+      paletteOpen: false,
+      ...(fromRegion ? { centre: 'preview' as const } : {}),
+    })
     useConfigStore.getState().select({ key: target.key, region: target.region })
   },
 

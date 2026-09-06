@@ -26,17 +26,22 @@
  * `overflow-hidden`, so a popover that runs off the bottom is not scrollable —
  * it is unreachable. `placeAt` flips it above its anchor when there is no room
  * below, which it can only do knowing how tall the frame is, so the frame is
- * measured in a layout effect and placed again before the browser paints.
+ * measured in a layout effect and placed again before the browser paints. An
+ * editor with more rows than the window has is capped at `maxPopoverHeight` and
+ * scrolls *inside* the frame instead, under a caption that stays put — a colour
+ * palette is nineteen rows, and no anchor makes nineteen rows fit.
  *
  * Focus is trapped while it is open and returns to the element that opened it on
- * close. That is not decoration: the popover is anchored to a tree row the user
+ * close. It lands on the editor's own `[data-autofocus]` control when there is
+ * one — an editor drawing more than the key it was opened on says which row that
+ * key is — and on the first focusable control otherwise. That is not decoration: the popover is anchored to a tree row the user
  * was standing on, and losing the row means losing the place in a 167-key list.
  */
 import { editorFor, editorWidthFor } from '@/components/shell/editor-registry'
 import { ValueEditor } from '@/components/shell/editors'
 import { diagnosticsAt, useDiagnostics } from '@/lib/diagnostics'
 import { setKey } from '@/lib/edit'
-import { POPOVER_WIDTH, placeAt } from '@/lib/popover'
+import { POPOVER_WIDTH, maxPopoverHeight, placeAt } from '@/lib/popover'
 import type { TomlValue } from '@/model/parse'
 import { useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
@@ -76,7 +81,20 @@ export function InlinePopover() {
 
   useLayoutEffect(() => {
     const frame = frameRef.current
-    setHeight(frame === null ? null : frame.offsetHeight)
+    if (frame === null) {
+      setHeight(null)
+      return
+    }
+    setHeight(frame.offsetHeight)
+    // An editor can change height without the popover moving to another key —
+    // the theme editor unfolds its colour overrides — and a top computed for the
+    // short frame leaves the tall one hanging off the bottom of a shell that
+    // does not scroll. Re-measuring is the same correction as the first pass,
+    // applied whenever the content settles rather than only on open.
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => setHeight(frame.offsetHeight))
+    observer.observe(frame)
+    return () => observer.disconnect()
   }, [target])
 
   // Take focus on open, and hand it back on close. The restore is the effect's
@@ -86,10 +104,17 @@ export function InlinePopover() {
     if (target === null) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const frame = frameRef.current
-    // An editor may have nothing focusable in it; the frame itself is then the
-    // focus holder, which is what keeps `esc` and `tab` working inside it.
-    const first = frame?.querySelector<HTMLElement>(FOCUSABLE) ?? frame
+    // An editor that spans more than the key it was opened on says which of its
+    // controls belongs to that key — the theme palette is twenty colour rows and
+    // one of them is the one asked for. Otherwise the first control, and failing
+    // that the frame itself, which is what keeps `esc` and `tab` working inside
+    // an editor with nothing focusable in it.
+    const asked = frame?.querySelector<HTMLElement>('[data-autofocus]')
+    const first = asked ?? frame?.querySelector<HTMLElement>(FOCUSABLE) ?? frame
     first?.focus()
+    // Focusing scrolls a control into view on its own in a browser; saying so
+    // explicitly is what makes it true in a frame that scrolls its own body.
+    first?.scrollIntoView({ block: 'nearest' })
     return () => opener?.focus()
   }, [target])
 
@@ -165,22 +190,31 @@ export function InlinePopover() {
       open
       tabIndex={-1}
       aria-label={caption}
-      style={{ left, top, width }}
+      // The cap is the same number `maxPopoverHeight` places against: a window
+      // less two gaps. It is inline rather than a utility class because the two
+      // have to be one fact — a class the arithmetic did not know about would
+      // put the frame back off the bottom of the screen.
+      style={{ left, top, width, maxHeight: maxPopoverHeight(window.innerHeight) }}
       className="fixed z-50 m-0 flex flex-col gap-[6px] border border-coral bg-mantle px-3 py-[10px] text-text shadow-[0_10px_30px_rgba(0,0,0,0.5)] outline-none"
     >
-      <div className="text-coral">{`┤ ${caption} ├`}</div>
-      {/* The editor is looked up, not written here, so it is built with
-          `createElement`: which component renders is data — see editor-registry.
-          The `key` remounts it when the popover moves to another setting, so a
-          draft never survives into a different key's form. */}
-      {createElement(editorFor(path) ?? ValueEditor, {
-        key: path,
-        path,
-        value: effective.get(path),
-        diagnostics: diagnosticsAt(diagnostics, path),
-        commit,
-        cancel,
-      })}
+      <div className="shrink-0 text-coral">{`┤ ${caption} ├`}</div>
+      {/* The caption stays; the editor scrolls under it. An editor with more
+          rows than the window has is otherwise unreachable, because the shell is
+          `overflow-hidden` and nothing scrolls the frame back into view. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* The editor is looked up, not written here, so it is built with
+            `createElement`: which component renders is data — see editor-registry.
+            The `key` remounts it when the popover moves to another setting, so a
+            draft never survives into a different key's form. */}
+        {createElement(editorFor(path) ?? ValueEditor, {
+          key: path,
+          path,
+          value: effective.get(path),
+          diagnostics: diagnosticsAt(diagnostics, path),
+          commit,
+          cancel,
+        })}
+      </div>
     </dialog>
   )
 }

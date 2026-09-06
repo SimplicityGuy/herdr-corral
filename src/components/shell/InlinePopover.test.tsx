@@ -1,6 +1,6 @@
 import { clearEditors, registerEditor } from '@/components/shell/editor-registry'
 import { InlinePopover } from '@/components/shell/InlinePopover'
-import { POPOVER_WIDTH } from '@/lib/popover'
+import { POPOVER_WIDTH, maxPopoverHeight } from '@/lib/popover'
 import { SettingsTree } from '@/components/shell/SettingsTree'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'
@@ -137,6 +137,19 @@ describe('InlinePopover', () => {
     render(<InlinePopover />)
 
     expect(screen.getByRole('dialog')).toHaveStyle({ width: `${POPOVER_WIDTH}px` })
+  })
+
+  it('caps its height at the window, because the shell does not scroll', () => {
+    // The theme editor measured 2148px in an 820px window: everything past the
+    // fold was unreachable, from the tree as well as from the preview. The frame
+    // stops at the window and its body scrolls inside that.
+    registerEditor('ui.sidebar_width', () => <p>{'a very tall editor'}</p>)
+    open('ui.sidebar_width')
+    render(<InlinePopover />)
+
+    expect(screen.getByRole('dialog')).toHaveStyle({
+      maxHeight: `${maxPopoverHeight(window.innerHeight)}px`,
+    })
   })
 
   it('hands the key to whichever editor claimed it', () => {

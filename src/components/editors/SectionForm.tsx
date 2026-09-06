@@ -18,10 +18,11 @@
  * of just the agent name and its toggle group instead, reusing `EnumControl`
  * rather than `Field`'s full chrome.
  *
- * A key `ownedElsewhere` (`keys.*`, `theme.custom.*`, and every structured
- * type) gets a one-line fallback naming the type and pointing at the editor
- * that will claim it, so `all` never simply omits two thirds of the config —
- * it just does not pretend to edit the third it is not responsible for.
+ * A key `ownedElsewhere` (`keys.*`, the `theme` table with `ui.accent`, and
+ * every structured type) gets a one-line row naming the type, and that row is a
+ * button that opens the editor which owns the key. `all` therefore lists every
+ * key *and* reaches every key, without this file knowing what any of those
+ * editors look like.
  */
 import { EnumControl, Field } from '@/components/common/Field'
 import { Panel } from '@/components/shell/Panel'
@@ -30,6 +31,7 @@ import { type UiSection, keysOf } from '@/lib/sections'
 import { ownedElsewhere } from '@/lib/scalar-fields'
 import { byKey, enumOptions, sections, typeOf } from '@/schema'
 import { useConfigStore } from '@/store/config'
+import { anchorOf, useShellStore } from '@/store/shell'
 import { useMemo } from 'react'
 
 interface ReferenceGroup {
@@ -136,16 +138,33 @@ function AgentSoundRow({ path }: { path: string }) {
   )
 }
 
-/** What a key `ownedElsewhere` gets instead of a `Field`: a name, not a control. */
+/**
+ * What a key `ownedElsewhere` gets instead of a `Field`: the editor that owns it.
+ *
+ * It was a line of text, which read as a dead end — `[6] all` promises every
+ * key, and a third of them said "edited by its own form" without saying where.
+ * The row is now the door: it opens that key's editor in the popover, anchored
+ * to itself, which is the same thing `enter` on the tree row does and the same
+ * thing a click on the preview region does. A key with no editor of its own
+ * still lands on the generic `ValueEditor`, so the row is never a lie.
+ *
+ * The name is `<key>: open editor` rather than the bare path, because the
+ * coverage test in `Field.test.tsx` reads "a control labelled exactly the path"
+ * as proof `Field` owns a key, and this row is the proof it does not.
+ */
 function FallbackRow({ path }: { path: string }) {
   const declared = typeOf(path)
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-surface0 pb-[10px] last:border-b-0">
+    <button
+      type="button"
+      aria-label={`${path}: open editor`}
+      onClick={(event) =>
+        useShellStore.getState().openEditor({ key: path, anchor: anchorOf(event.currentTarget) })
+      }
+      className="flex w-full items-center justify-between gap-2 border-b border-surface0 pb-[10px] text-left last:border-b-0 hover:text-text"
+    >
       <span className="text-subtext0">{path}</span>
-      {/* Deliberately no `aria-label` here: a fallback is not a control, and the
-          coverage test (`Field.test.tsx`) reads "no labelled control" as proof
-          a key is owned elsewhere rather than simply missed. */}
-      <span className="text-overlay0">{declared ?? 'value'} — edited by its own form</span>
-    </div>
+      <span className="text-overlay0">{declared ?? 'value'} — edited by its own form ▸</span>
+    </button>
   )
 }
