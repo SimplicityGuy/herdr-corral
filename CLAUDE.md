@@ -133,11 +133,11 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits (`set` / `reset` / `apply`, the last being several writes as one undo step), effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette, the landing gate and which tab the export dialog is on |
 | `src/components/preview/` | `HerdrPreview` — the herdr mock, drawn from the effective config — with `sample.ts` (the session it draws), `tokens.ts` (the palette and the token rows) and `regions.ts` (the region → keys map behind click-to-edit) |
 | `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, the editor registry and the generic value editor |
-| `src/components/editors/` | `KeysEditor` (section `[4]`) and `ChordEditor`, the popover the `keys.*` chords register; `SectionForm` and `register-scalar-editors.tsx`; `RowsEditor` and its `rows-model.ts`, the sidebar token rows with their styles and per-agent overrides; `StatusBarEditor`, `ThemeEditor` *(planned)* |
+| `src/components/editors/` | `KeysEditor` (section `[4]`) and `ChordEditor`, the popover the `keys.*` chords register; `SectionForm` and `register-scalar-editors.tsx`; `RowsEditor` and its `rows-model.ts`, the sidebar token rows with their styles and per-agent overrides; `StatusBarEditor` (section `[3]`, with `status-bar-model.ts`) and `ThemeEditor` (section `[5]`), each also the popover its preview region opens |
 | `src/components/common/` | `KeyChordInput`, `Field` (the generic scalar control, by schema type), and `ColorField` — controls shared by more than one editor, `Field`/`ColorField` by `SectionForm` and the popover editors that claim a key by type |
 | `src/components/io/` | `Landing` — the first screen: drop / pick / paste / start from defaults, with the 1 MiB guard and the line-and-column parse error. `ExportDialog` — the full file and the changed hunks, with download / copy / install snippet and the two destructive verbs |
 | `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
-| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts` (single and grouped writes), `download.ts` (file / clipboard / install snippet), `diff.ts` (the unified diff the export dialog draws), `capture.ts` (keydown → chord), `keybindings.ts`, `scalar-fields.ts` (which keys `Field` owns) |
+| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts` (single and grouped writes), `download.ts` (file / clipboard / install snippet), `diff.ts` (the unified diff the export dialog draws), `capture.ts` (keydown → chord), `keybindings.ts`, `scalar-fields.ts` (which keys `Field` owns — not `keys.*`, not the `theme` table or `ui.accent`, not the structured types) |
 | `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount |
 | `e2e/` | Playwright specs, run against `dist/` |
 | `scripts/` | `gen-reference.ts`, its parser and fixture, other build-time generators, and `no-network.test.ts` — the sweep of `src/` that holds ADR-0001's "no network calls at runtime" to its word |
@@ -146,10 +146,17 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 config is in hand (`useShellStore`'s `landing`), and the export dialog mounts beside the shell
 because both `:w` and the palette open it. Later beads fill the regions it lays out rather than
 inventing a new structure. The centre frame is one line per section — `SectionForm` for the two
-non-visual sections (`layout`, `all`), `KeysEditor` for `keys` — falling through to `HerdrPreview`,
-the default, for the rest; a bead adding its own editor for a remaining section replaces just its
-own line. The editors a preview region opens are claimed through `registerEditor`, so a bead adds
-one without touching `App.tsx`.
+non-visual sections (`layout`, `all`), `KeysEditor` for `keys`, `StatusBarView` for `status`,
+`ThemeView` for `theme` — falling through to `HerdrPreview`, the default, for the rest; a bead
+adding its own editor for a remaining section replaces just its own line. **Region clicks never
+change the centre view.** The shell holds two facts, not one: `section` is what the tree and the
+top line are on, and `centre` (`'preview' | 'section'`) is which frame the middle draws. A switch
+sets both, through `centreOf`; a click on a region of the mock sets only the section — so the tree
+cursor can follow the click — and pins `centre` to the preview, because a popover anchored to a
+thing must not have that thing replaced underneath it. The editors a preview
+region opens are claimed through `registerEditor`, so a bead adds one without touching `App.tsx` —
+except for the **import order**, which is load-bearing: later claims win, so a module that takes a
+key back off `register-scalar-editors`' type-based claim must be imported after it.
 
 ### The shell's API
 
@@ -165,8 +172,12 @@ import { useDiagnostics } from '@/lib/diagnostics'
 - **Open an editor.** `useShellStore.getState().openEditor({ key, anchor, region?, caption? })`
   puts the popover on screen anchored to a viewport rectangle — `anchorOf(element)` builds one
   — and mirrors `{ key, region }` into the config store's `selection`, so the tree's focused
-  row and the preview's selected outline follow without talking to each other. `closeEditor()`
-  is the other half; `esc` already calls it.
+  row and the preview's selected outline follow without talking to each other. Passing `region`
+  also pins the centre frame to the preview, which is what "a region click never changes the
+  centre view" means in code; a caller with no region leaves the centre as it found it.
+  `closeEditor()` is the other half; `esc` already calls it.
+  The popover is capped at `maxPopoverHeight` (`lib/popover.ts`) and scrolls inside that, so an
+  editor with more rows than the window has is still reachable in a shell that does not scroll.
 - **Claim a key.** `registerEditor(key | predicate, Component)` at module scope, with `App.tsx`
   importing the module that registers. The component takes `EditorProps` and calls exactly one
   of `commit(value)` or `cancel()` — the popover owns the transaction, so `esc` cancels without

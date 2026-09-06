@@ -24,6 +24,11 @@
  * uses {@link POPOVER_ASSUMED_HEIGHT} and a layout effect re-places with the real
  * one before the browser paints. The width is known up front — the editor
  * registry carries it — so it is passed in rather than measured.
+ *
+ * Height has a ceiling of its own, {@link maxPopoverHeight}: the shell does not
+ * scroll, so a frame taller than the window loses everything below the fold. The
+ * frame is capped and scrolls inside the cap, and placement uses the capped
+ * height rather than the one the editor asked for.
  */
 import type { Anchor } from '@/store/shell'
 
@@ -53,6 +58,20 @@ export const POPOVER_ASSUMED_HEIGHT = 120
 /** The tallest strip a popover is anchored to, however tall its region is. */
 export const MAX_ANCHOR_HEIGHT = 24
 
+/**
+ * The tallest a popover may be drawn, in a window of this height.
+ *
+ * The shell is `overflow-hidden`, so a frame taller than the window is not
+ * scrolled back into reach — it is simply gone below the fold, along with
+ * however many of its controls did not fit. The frame is capped in CSS
+ * (`InlinePopover`) and its body scrolls inside the cap; this is the same number
+ * as arithmetic, so `placeAt` positions the frame the user will actually see
+ * rather than the one the editor asked for.
+ */
+export function maxPopoverHeight(viewportHeight: number): number {
+  return Math.max(0, viewportHeight - POPOVER_GAP * 2)
+}
+
 export interface Placement {
   readonly left: number
   readonly top: number
@@ -75,7 +94,8 @@ export function shortAnchor(anchor: Anchor, pointerY = 0): Anchor {
 
 /**
  * Below the anchor, above it when that does not fit, and inside the viewport
- * either way.
+ * either way — at the capped height when the editor is taller than the window,
+ * because that is the height it will be drawn at.
  *
  * jsdom reports every rectangle as zero, so a test sees the top-left corner and
  * a browser sees the anchor. Both are positions, and neither needs a mocked
@@ -84,11 +104,15 @@ export function shortAnchor(anchor: Anchor, pointerY = 0): Anchor {
 export function placeAt(
   anchor: Anchor,
   viewport: { width: number; height: number },
-  height: number = POPOVER_ASSUMED_HEIGHT,
+  requested: number = POPOVER_ASSUMED_HEIGHT,
   width: number = POPOVER_WIDTH,
 ): Placement {
   const rightmost = Math.max(POPOVER_GAP, viewport.width - width - POPOVER_GAP)
   const left = Math.max(POPOVER_GAP, Math.min(anchor.left, rightmost))
+
+  // A popover taller than the window is drawn at the cap and scrolls inside it,
+  // so that — not what the editor would have liked — is the height being placed.
+  const height = Math.min(requested, maxPopoverHeight(viewport.height))
 
   // The lowest top that still leaves the whole popover on screen. Negative when
   // the popover is taller than the window, which the final clamp catches.

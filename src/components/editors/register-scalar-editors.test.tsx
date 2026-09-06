@@ -27,18 +27,21 @@ describe('register-scalar-editors', () => {
       'update.channel', // enum
       'ui.window_title', // string
       'ui.sound.path', // path
-      'ui.accent', // color
       'experimental.cjk_ime_agents', // list of strings
     ]) {
       expect(editorFor(key), `expected a claim for ${key}`).not.toBeNull()
     }
   })
 
-  it('leaves keys.*, theme.custom.*, and the structured settings unclaimed', () => {
+  it('leaves keys.*, the theme table, and the structured settings unclaimed', () => {
     for (const key of [
       'keys.help',
       'keys.prefix',
+      // The whole `theme` table and `ui.accent` belong to the theme editor —
+      // this module claims by type, and colour is now entirely its.
       'theme.custom.accent',
+      'theme.name',
+      'ui.accent',
       'ui.tab_bar_right',
       'ui.sidebar.agents.rows',
     ]) {

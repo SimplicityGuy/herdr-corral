@@ -6,8 +6,10 @@
  * src/index.css, and this file uses those and nothing else.
  *
  * The centre frame is one line per section — `CentreFrame` below. `SectionForm`
- * draws the two non-visual sections (`layout`, `all`), `KeysEditor` draws `keys`;
- * every other section falls through to the herdr mock, which is the default:
+ * draws the two non-visual sections (`layout`, `all`), `KeysEditor` draws `keys`,
+ * `StatusBarView` draws `status` and `ThemeView` draws `theme`; `sidebar` is the
+ * herdr mock, and so is any section while the shell's `centre` is pinned to the
+ * preview by a click on one of its regions:
  * `HerdrPreview` reads the effective config and opens an editor for whichever
  * region is clicked, through the same `useShellStore.openEditor` the tree uses.
  * That is also why the editor modules are imported here — for the keys they
@@ -29,7 +31,14 @@ import { HerdrPreview } from '@/components/preview/HerdrPreview'
 
 import '@/components/editors/register-scalar-editors'
 
+// After the scalar editors, deliberately. Importing a view also runs its
+// module's `registerEditor` calls, later claims win, and these two take the four
+// tab bar settings and the five theme scalars back off the generic type-based
+// claim above. A module is evaluated where it is *first* imported, so moving
+// either line up would hand those keys back to the generic form.
 import { SectionForm } from '@/components/editors/SectionForm'
+import { StatusBarView } from '@/components/editors/StatusBarEditor'
+import { ThemeView } from '@/components/editors/ThemeEditor'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
 import { InlinePopover } from '@/components/shell/InlinePopover'
@@ -62,16 +71,29 @@ export default function App() {
   )
 }
 
-/** What the centre column shows: one line per section, then the preview. */
+/**
+ * What the centre column shows.
+ *
+ * Two questions, asked in order. `centre` is *which frame* — the herdr mock, or
+ * the open section's own panel — and a click on a region of the mock pins it to
+ * the preview, so that clicking a thing never takes that thing off the screen.
+ * Only then does the section decide which panel: one line each.
+ */
 function CentreFrame() {
+  const centre = useShellStore((state) => state.centre)
   const section = useShellStore((state) => state.section)
+  if (centre === 'preview') return <PreviewFrame />
   switch (section) {
     case 'layout':
       return <SectionForm section="layout" />
     case 'all':
       return <SectionForm section="all" />
+    case 'status':
+      return <StatusBarView />
     case 'keys':
       return <KeysEditor />
+    case 'theme':
+      return <ThemeView />
     default:
       return <PreviewFrame />
   }

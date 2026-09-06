@@ -14,9 +14,12 @@
  * to cyan (`checkColor`, model/validate.ts), so typing keeps working and the
  * field says why underneath, in the same words that diagnostic uses.
  *
- * Reused wherever a scalar `color` key is edited: `Field` claims every one
- * except `theme.custom.*`, which the theme editor claims for itself and reuses
- * this component to do it.
+ * Reused wherever a colour is edited. Every `color` key herdr has belongs to
+ * the theme editor now — the nineteen `theme.custom.*` slots and `ui.accent`,
+ * which is the one accent that lives outside that table — and that editor draws
+ * all twenty of them with this component rather than a second one of its own.
+ * `Field` still reaches it through `ScalarControl` for any colour key a later
+ * herdr adds outside the theme.
  */
 import { isColor, isResetColor } from '@/model/validate'
 import { useId } from 'react'
@@ -60,6 +63,15 @@ export interface ColorFieldProps {
   readonly onChange: (value: string) => void
   /** The accessible name for the text input — the schema path, by convention. */
   readonly 'aria-label': string
+  /**
+   * Mark this field as where the popover should put the cursor when it opens.
+   *
+   * A popover captioned `theme.custom.sidebar_bg` opens on a palette of twenty
+   * colour rows, and the one the user asked for has to be the one they land on.
+   * The host reads `[data-autofocus]` (`InlinePopover`) rather than the field
+   * taking focus itself, so the two never fight over it.
+   */
+  readonly autofocus?: boolean
 }
 
 export function ColorField(props: ColorFieldProps) {
@@ -97,6 +109,7 @@ export function ColorField(props: ColorFieldProps) {
         <input
           id={inputId}
           aria-label={label}
+          data-autofocus={props.autofocus ? 'true' : undefined}
           type="text"
           value={value}
           onChange={(event) => props.onChange(event.target.value)}

@@ -264,14 +264,20 @@ const U16_MAX = 65_535
 /** `MAX_TOAST_DELAY_SECONDS` (src/config/model.rs:12), enforced at line 1203. */
 const MAX_TOAST_DELAY_SECONDS = 3_600
 
-/** `MAX_TAB_BAR_COMMAND_INTERVAL_SECONDS` (src/config/tab_bar.rs:5) — one year. */
-const MAX_TAB_BAR_COMMAND_INTERVAL_SECONDS = 31_536_000
+/**
+ * `MAX_TAB_BAR_COMMAND_INTERVAL_SECONDS` (src/config/tab_bar.rs:5) — one year.
+ *
+ * The three tab-bar ceilings are exported because the status bar editor states
+ * them to the user before they type a value herdr would hide the entry over.
+ * One number, read by the check and by the sentence that prevents it.
+ */
+export const MAX_TAB_BAR_COMMAND_INTERVAL_SECONDS = 31_536_000
 
 /** `MAX_TAB_BAR_COMMAND_TIMEOUT_SECONDS` (src/config/tab_bar.rs:6). */
-const MAX_TAB_BAR_COMMAND_TIMEOUT_SECONDS = 3_600
+export const MAX_TAB_BAR_COMMAND_TIMEOUT_SECONDS = 3_600
 
 /** `MAX_TAB_BAR_RIGHT_ENTRIES` (src/config/tab_bar.rs:7). */
-const MAX_TAB_BAR_RIGHT_ENTRIES = 16
+export const MAX_TAB_BAR_RIGHT_ENTRIES = 16
 
 /** `MAX_SIDEBAR_ROWS` (src/config/sidebar.rs:7). */
 const MAX_SIDEBAR_ROWS = 16
@@ -426,12 +432,17 @@ export const COMMAND_TYPES: readonly string[] = ['shell', 'pane', 'popup', 'plug
  * a stray field is silently dropped, and corral is the only one who will say so.
  * Both behaviours are verified against `herdr config check` in the tests.
  */
-interface TabBarEntryShape {
+export interface TabBarEntryShape {
   readonly required: readonly string[]
   readonly optional: readonly string[]
 }
 
-const TAB_BAR_ENTRY_FIELDS: ReadonlyMap<string, TabBarEntryShape> = new Map([
+/**
+ * Exported because the status bar editor draws one input per field: the fields
+ * a person is offered and the fields the validator accepts have to be the same
+ * table, or the editor writes entries its own diagnostics then reject.
+ */
+export const TAB_BAR_ENTRY_FIELDS: ReadonlyMap<string, TabBarEntryShape> = new Map([
   ['zoom', { required: [], optional: [] }],
   ['hostname', { required: [], optional: [] }],
   ['datetime', { required: [], optional: ['format'] }],

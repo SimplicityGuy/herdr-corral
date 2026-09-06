@@ -17,9 +17,10 @@ describe('Field coverage', () => {
       .map((entry) => entry.key)
       .filter((key) => !ownedElsewhere(key))
 
-    // 82 of the schema's 167 keys are Field's: everything but `keys.*`,
-    // `theme.custom.*`, and the four structured settings (invariant 5's split).
-    expect(keys.length).toBe(82)
+    // 77 of the schema's 167 keys are Field's: everything but `keys.*`, the
+    // whole `theme` table with `ui.accent`, and the four structured settings
+    // (invariant 5's split).
+    expect(keys.length).toBe(77)
 
     render(
       <>

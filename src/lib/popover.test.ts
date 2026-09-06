@@ -13,6 +13,7 @@ import {
   POPOVER_GAP,
   POPOVER_WIDE_WIDTH,
   POPOVER_WIDTH,
+  maxPopoverHeight,
   placeAt,
   shortAnchor,
 } from '@/lib/popover'
@@ -93,6 +94,34 @@ describe('placeAt', () => {
 
   it('reads a zero rect as the top-left corner, which is what jsdom gives', () => {
     expect(placeAt(anchor({}), VIEWPORT, 0)).toEqual({ left: POPOVER_GAP, top: POPOVER_GAP })
+  })
+})
+
+/**
+ * The theme editor is the case: nineteen colour rows measured 2148px tall in an
+ * 820px window, and the shell does not scroll, so everything past the fold was
+ * unreachable — from the tree as well as from the preview. The frame is capped
+ * and scrolls inside the cap, and placement uses the capped height.
+ */
+describe('a popover taller than the window', () => {
+  it('caps at the window less a gap at each end', () => {
+    expect(maxPopoverHeight(820)).toBe(820 - POPOVER_GAP * 2)
+    expect(maxPopoverHeight(0)).toBe(0)
+  })
+
+  it('places the capped frame fully on screen, top and bottom', () => {
+    const placed = placeAt(anchor({ top: 300, left: 40, height: 20 }), VIEWPORT, 2148)
+    const drawn = maxPopoverHeight(VIEWPORT.height)
+
+    expect(placed.top).toBe(POPOVER_GAP)
+    expect(bottomOf(placed, drawn)).toBeLessThanOrEqual(VIEWPORT.height - POPOVER_GAP)
+  })
+
+  it('places a frame that only just fits the same way as before', () => {
+    const fits = maxPopoverHeight(VIEWPORT.height)
+    expect(placeAt(anchor({ top: 300, height: 20 }), VIEWPORT, fits)).toEqual(
+      placeAt(anchor({ top: 300, height: 20 }), VIEWPORT, fits + 400),
+    )
   })
 })
 
