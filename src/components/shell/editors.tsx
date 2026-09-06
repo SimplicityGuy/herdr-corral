@@ -21,8 +21,17 @@ import { type ReactNode, useState } from 'react'
 /** herdr's type words whose value is a structure, not a line. */
 const STRUCTURED = new Set(['array', 'list of token rows', 'table of token rows', 'list of strings'])
 
+/**
+ * One field, drawn as a TUI input.
+ *
+ * The spin buttons a number field grows are curved chrome nobody asked for, and
+ * ADR-0002 has square corners everywhere, so they are turned off rather than
+ * restyled. (Never write the bare utility name in prose here: Tailwind scans
+ * comments and would emit it — see CLAUDE.md.)
+ */
 const FIELD =
-  'w-full border border-surface1 bg-base px-2 py-[2px] text-text outline-none focus:border-coral'
+  'w-full border border-surface1 bg-base px-2 py-[2px] text-text outline-none focus:border-coral' +
+  ' [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
 export function ValueEditor({ path, value, diagnostics, commit }: EditorProps) {
   const declared = typeOf(path)

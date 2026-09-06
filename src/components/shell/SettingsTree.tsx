@@ -38,16 +38,13 @@ export function SettingsTree() {
   const setFilter = useShellStore((state) => state.setFilter)
   const openEditor = useShellStore((state) => state.openEditor)
   const selectedKey = useConfigStore((state) => state.selection.key)
+  const editing = useShellStore((state) => state.editor !== null)
   const effective = useConfigStore((state) => state.effectiveAll())
   const diagnostics = useDiagnostics()
 
   const panelRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLInputElement>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
-  // Set while `j`/`k` or a palette jump moves the selection, so the effect below
-  // knows to pull the DOM focus along. A selection made by clicking a row must not
-  // steal focus back from wherever the click sent it.
-  const chasing = useRef(false)
 
   const keys = useMemo(
     () => keysOf(section).filter((key) => matchesFilter(key, filter)),
@@ -57,18 +54,20 @@ export function SettingsTree() {
 
   const focused = selectedKey !== undefined && keys.includes(selectedKey) ? selectedKey : keys[0]
 
+  // The DOM focus follows the selection, so `j`/`k` and a palette jump both land
+  // the user on the row. Not while a popover is open: the popover took focus on
+  // purpose, and it hands it back to this row on close.
   useEffect(() => {
-    if (!chasing.current || focused === undefined) return
-    chasing.current = false
-    rowRefs.current.get(focused)?.focus()
-  }, [focused])
+    if (editing || selectedKey === undefined) return
+    const row = rowRefs.current.get(selectedKey)
+    if (row !== undefined && document.activeElement !== row) row.focus()
+  }, [selectedKey, editing])
 
   const move = useCallback(
     (delta: number) => {
       if (focused === undefined) return
       const next = keys[keys.indexOf(focused) + delta]
       if (next === undefined) return
-      chasing.current = true
       useConfigStore.getState().select({ key: next })
     },
     [focused, keys],
@@ -130,7 +129,7 @@ export function SettingsTree() {
               setFilter('')
               event.currentTarget.blur()
             }}
-            className="min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-overlay0"
+            className="min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-overlay0 [&::-webkit-search-cancel-button]:appearance-none"
           />
         </div>
 

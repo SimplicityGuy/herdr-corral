@@ -1,6 +1,13 @@
+import { resetConfigStore } from '@/store/config'
+import { resetShellStore } from '@/store/shell'
 import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
+
+beforeEach(() => {
+  resetConfigStore()
+  resetShellStore()
+})
 
 describe('App', () => {
   it('renders the Console top line with the corral mark and the file name', () => {
@@ -26,6 +33,20 @@ describe('App', () => {
     expect(
       screen.getByRole('region', { name: 'preview · click anything to edit it' }),
     ).toBeInTheDocument()
+  })
+
+  it('fills the settings panel with the section the shell opens on', () => {
+    render(<App />)
+
+    const tree = within(screen.getByRole('region', { name: 'settings' }))
+    expect(tree.getByRole('button', { name: /^ui\.pane_borders/ })).toBeInTheDocument()
+  })
+
+  it('leaves the preview frame a placeholder for the preview bead', () => {
+    render(<App />)
+
+    const preview = within(screen.getByRole('region', { name: /^preview/ }))
+    expect(preview.getByText(/The herdr mock lands here/)).toBeInTheDocument()
   })
 
   it('shows the diagnostics line with the mode badge and the export verb', () => {

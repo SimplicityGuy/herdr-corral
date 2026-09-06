@@ -7,6 +7,7 @@
  * user exactly where `j`/`k` and `enter` already work. Nothing else has to know.
  */
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -58,56 +59,61 @@ export function CommandPalette() {
       description="Jump to a setting, or run a command."
       className="border border-surface1 bg-mantle"
     >
-      <CommandInput placeholder="jump to a setting, or run a command" />
-      <CommandList>
-        <CommandEmpty>nothing matches</CommandEmpty>
+      {/* This vendored `CommandDialog` puts the dialog around its children and
+          nothing else, so the cmdk root that the input and the list read their
+          context from has to be supplied here. */}
+      <Command className="bg-mantle">
+        <CommandInput placeholder="jump to a setting, or run a command" />
+        <CommandList>
+          <CommandEmpty>nothing matches</CommandEmpty>
 
-        <CommandGroup heading="actions">
-          <CommandItem
-            value="undo"
-            onSelect={() => run(() => useConfigStore.getState().undo())}
-          >
-            undo
-          </CommandItem>
-          <CommandItem
-            value="redo"
-            onSelect={() => run(() => useConfigStore.getState().redo())}
-          >
-            redo
-          </CommandItem>
-          <CommandItem
-            value="reset key to herdr's default"
-            onSelect={() =>
-              run(() => {
-                const key = useConfigStore.getState().selection.key
-                if (key !== undefined) resetKey(key)
-              })
-            }
-          >
-            reset key to herdr&rsquo;s default
-          </CommandItem>
-          {UI_SECTIONS.map((section) => (
+          <CommandGroup heading="actions">
             <CommandItem
-              key={section}
-              value={`switch to ${section}`}
-              onSelect={() => run(() => setSection(section))}
+              value="undo"
+              onSelect={() => run(() => useConfigStore.getState().undo())}
             >
-              {`switch to ${section}`}
+              undo
             </CommandItem>
-          ))}
-        </CommandGroup>
+            <CommandItem
+              value="redo"
+              onSelect={() => run(() => useConfigStore.getState().redo())}
+            >
+              redo
+            </CommandItem>
+            <CommandItem
+              value="reset key to herdr's default"
+              onSelect={() =>
+                run(() => {
+                  const key = useConfigStore.getState().selection.key
+                  if (key !== undefined) resetKey(key)
+                })
+              }
+            >
+              reset key to herdr&rsquo;s default
+            </CommandItem>
+            {UI_SECTIONS.map((section) => (
+              <CommandItem
+                key={section}
+                value={`switch to ${section}`}
+                onSelect={() => run(() => setSection(section))}
+              >
+                {`switch to ${section}`}
+              </CommandItem>
+            ))}
+          </CommandGroup>
 
-        <CommandGroup heading="settings">
-          {allKeys().map((key) => (
-            <CommandItem key={key} value={key} onSelect={() => jumpTo(key)}>
-              <span className="truncate">{key}</span>
-              <span className="ml-auto text-overlay0">
-                {formatValue(effective.get(key))}
-              </span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
+          <CommandGroup heading="settings">
+            {allKeys().map((key) => (
+              <CommandItem key={key} value={key} onSelect={() => jumpTo(key)}>
+                <span className="truncate">{key}</span>
+                <span className="ml-auto text-overlay0">
+                  {formatValue(effective.get(key))}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
     </CommandDialog>
   )
 }
