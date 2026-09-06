@@ -107,6 +107,37 @@ describe('keys', () => {
   })
 })
 
+describe('printing back what was parsed', () => {
+  it('round-trips every chord except the one whose key is the separator', () => {
+    const spellings = [
+      'ctrl+b',
+      'prefix+shift+n',
+      'shift+tab',
+      'f12',
+      'space',
+      'minus',
+      'backtick',
+      'A',
+      'prefix+alt+1',
+    ]
+    const printed = spellings.map((text) => normalizeChord(text) as string)
+    expect(printed.map((text) => normalizeChord(text))).toEqual(printed)
+  })
+
+  it('prints the plus key as a label herdr cannot read back either', () => {
+    expect(round('plus')).toBe('+')
+    expect(parseChord('+')).toBeNull()
+    expect(round('shift+plus')).toBe('shift++')
+    expect(parseChord('shift++')).toBeNull()
+  })
+
+  it('always writes super, never the cmd herdr shows on macOS', () => {
+    expect(round('cmd+k')).toBe('super+k')
+    expect(round('command+k')).toBe('super+k')
+    expect(round('super+k')).toBe('super+k')
+  })
+})
+
 describe('the prefix marker', () => {
   it('marks a chord as prefix mode and prints it back', () => {
     expect(parseChord('prefix+shift+n')).toEqual({
@@ -139,6 +170,17 @@ describe('chords herdr rejects', () => {
   it('rejects a multi-character name that is not a key', () => {
     expect(round('pgup')).toBeNull()
     expect(round('delete')).toBeNull()
+  })
+
+  it('does not answer a modifier or a key name out of Object.prototype', () => {
+    // `herdr config check` calls all of these `invalid keybinding`; a lookup
+    // table with a prototype would have turned the first two into a bare `x`.
+    for (const inherited of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(parseModifier(inherited)).toBeNull()
+      expect(round(`${inherited}+x`)).toBeNull()
+      expect(round(inherited)).toBeNull()
+      expect(parseModifierCombo(inherited)).toBeNull()
+    }
   })
 
   it('tolerates whitespace around the parts, as herdr trims each one', () => {

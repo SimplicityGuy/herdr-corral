@@ -17,6 +17,18 @@
  * the identity used for duplicate detection. `prefix+x` and a direct `x` live in
  * separate namespaces (src/config/keybinds.rs:386-437), so the printed label,
  * which carries the `prefix+`, is the right key for both.
+ *
+ * ## Printing is not always round-trippable
+ *
+ * `+` is the separator, so the one key whose character *is* the separator has a
+ * spelling that reads but does not re-read: `normalizeChord('plus')` is `'+'`,
+ * and `parseChord('+')` is `null`, as is any chord with `+` as its key. herdr has
+ * exactly the same hole — `format_key_combo` prints `Char('+')` as `+` and
+ * `parse_key_combo` then rejects it — so corral reproduces it rather than
+ * inventing an escape herdr would not understand. An editor writing a binding
+ * back to a file must therefore keep the user's own spelling (`minus`, `plus`)
+ * when `parseChord(formatChord(chord))` comes back null, instead of writing the
+ * normalized label.
  */
 
 /**
@@ -62,55 +74,63 @@ export type Binding =
 /**
  * Modifier aliases herdr accepts, from `parse_modifier_token`
  * (src/config/keybinds.rs:1169-1178). Matching is case-insensitive.
+ *
+ * A `Map` rather than an object literal, because the key comes straight out of
+ * the user's file: a plain object would answer `constructor` and `__proto__`
+ * out of `Object.prototype` and turn a chord herdr rejects into one corral
+ * accepts.
  */
-const MODIFIER_TOKENS: Readonly<Record<string, Modifier>> = {
-  ctrl: 'ctrl',
-  control: 'ctrl',
-  shift: 'shift',
-  alt: 'alt',
-  option: 'alt',
-  meta: 'alt',
-  cmd: 'super',
-  command: 'super',
-  super: 'super',
-  hyper: 'hyper',
-}
+const MODIFIER_TOKENS: ReadonlyMap<string, Modifier> = new Map([
+  ['ctrl', 'ctrl'],
+  ['control', 'ctrl'],
+  ['shift', 'shift'],
+  ['alt', 'alt'],
+  ['option', 'alt'],
+  ['meta', 'alt'],
+  ['cmd', 'super'],
+  ['command', 'super'],
+  ['super', 'super'],
+  ['hyper', 'hyper'],
+] satisfies readonly (readonly [string, Modifier])[])
 
 /**
  * Named keys, from the match in `parse_key_combo`
  * (src/config/keybinds.rs:1241-1279). The named punctuation entries resolve to
  * the character they produce, because `format_key_combo` prints a `Char` as
  * itself — so `minus` normalizes to `-` and never back to `minus`.
+ *
+ * A `Map` for the same reason as `MODIFIER_TOKENS`: the lookup key is the
+ * user's text.
  */
-const NAMED_KEYS: Readonly<Record<string, string>> = {
-  space: 'space',
-  ' ': 'space',
-  enter: 'enter',
-  return: 'enter',
-  esc: 'esc',
-  escape: 'esc',
-  tab: 'tab',
-  backspace: 'backspace',
-  bs: 'backspace',
-  left: 'left',
-  right: 'right',
-  up: 'up',
-  down: 'down',
-  minus: '-',
-  comma: ',',
-  period: '.',
-  slash: '/',
-  backslash: '\\',
-  quote: "'",
-  double_quote: '"',
-  'double-quote': '"',
-  semicolon: ';',
-  colon: ':',
-  percent: '%',
-  ampersand: '&',
-  backtick: '`',
-  plus: '+',
-}
+const NAMED_KEYS: ReadonlyMap<string, string> = new Map([
+  ['space', 'space'],
+  [' ', 'space'],
+  ['enter', 'enter'],
+  ['return', 'enter'],
+  ['esc', 'esc'],
+  ['escape', 'esc'],
+  ['tab', 'tab'],
+  ['backspace', 'backspace'],
+  ['bs', 'backspace'],
+  ['left', 'left'],
+  ['right', 'right'],
+  ['up', 'up'],
+  ['down', 'down'],
+  ['minus', '-'],
+  ['comma', ','],
+  ['period', '.'],
+  ['slash', '/'],
+  ['backslash', '\\'],
+  ['quote', "'"],
+  ['double_quote', '"'],
+  ['double-quote', '"'],
+  ['semicolon', ';'],
+  ['colon', ':'],
+  ['percent', '%'],
+  ['ampersand', '&'],
+  ['backtick', '`'],
+  ['plus', '+'],
+])
 
 /** The prefix marker a binding string carries. Case-sensitive, as in herdr. */
 const PREFIX_MARKER = 'prefix+'
@@ -125,7 +145,7 @@ function sortModifiers(modifiers: Iterable<Modifier>): Modifier[] {
 
 /** Read one modifier token. Returns `null` when the token names something else. */
 export function parseModifier(token: string): Modifier | null {
-  return MODIFIER_TOKENS[token.trim().toLowerCase()] ?? null
+  return MODIFIER_TOKENS.get(token.trim().toLowerCase()) ?? null
 }
 
 /**
@@ -203,8 +223,8 @@ function parseChordBody(text: string): Omit<Chord, 'prefix'> | null {
   if (lower === 'tab' && modifiers.has('shift')) {
     modifiers.delete('shift')
     key = 'backtab'
-  } else if (lower in NAMED_KEYS) {
-    key = NAMED_KEYS[lower]
+  } else if (NAMED_KEYS.has(lower)) {
+    key = NAMED_KEYS.get(lower) as string
   } else {
     // The single-character arm is reached before the function-key arm, so a bare
     // `f` is the letter f and only `f1`, `f12`, … are function keys.
@@ -241,11 +261,19 @@ export function parseChord(text: string): Chord | null {
 }
 
 /**
- * Print a chord the way herdr prints it (`format_key_combo`,
- * src/config/keybinds.rs:1111-1159).
+ * Print a chord in the form a config file spells it, following
+ * `format_key_combo` (src/config/keybinds.rs:1111-1159) with one deliberate
+ * departure.
  *
  * BackTab is the one code that spells its own shift: it renders as `shift+tab`
  * after the other modifiers rather than taking a `shift` part of its own.
+ *
+ * The departure is `super`. herdr's own printer renders that bit as `cmd` on
+ * macOS and `super` everywhere else (`super_modifier_label`,
+ * src/config/keybinds.rs:1161-1167), because it is labelling keys on the
+ * machine in front of you. corral is editing a file that may be read on another
+ * machine, so it always writes `super`, which herdr's *parser* treats as
+ * identical to `cmd` and `command` (src/config/keybinds.rs:1174).
  */
 export function formatChord(chord: Chord): string {
   const parts = chord.modifiers.filter(

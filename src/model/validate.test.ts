@@ -13,6 +13,8 @@ import {
 } from '@/model/validate'
 import type { Diagnostic } from '@/model/validate'
 import { allEntries, sidebarTokenBuiltins, themeNames } from '@/schema'
+import herdrCheckConfig from '@/test/fixture-herdr-check.toml?raw'
+import herdrCheckOutput from '@/test/fixture-herdr-check.txt?raw'
 
 /**
  * An effective config: every documented default, with the overrides layered on.
@@ -218,6 +220,17 @@ describe('theme names', () => {
     expect(canonicalThemeName('catppucin')).toBeNull()
   })
 
+  it('does not answer a theme name out of Object.prototype', () => {
+    // herdr calls this an unknown theme name; a lookup table with a prototype
+    // would have passed it off as a real one and said nothing.
+    for (const inherited of ['constructor', '__proto__', 'valueOf']) {
+      expect(canonicalThemeName(inherited)).toBeNull()
+    }
+    expect(messagesAt(validate(config({ 'theme.name': 'constructor' })), 'theme.name')[0]).toContain(
+      'unknown theme name "constructor"',
+    )
+  })
+
   it('canonicalizes every name the schema lists', () => {
     expect(themeNames().map((name) => canonicalThemeName(name))).toEqual([...themeNames()])
   })
@@ -401,6 +414,41 @@ describe('ui.tab_bar_right', () => {
     })
   })
 
+  it('reports a stray field once, like the other array of tables does', () => {
+    const text = `[[ui.tab_bar_right]]
+type = "zoom"
+bogus = 1
+
+[[keys.command]]
+key = "prefix+alt+g"
+command = "lazygit"
+bogus = 1
+`
+    const parsed = parseToml(text)
+    const effective = config()
+    for (const [path, value] of parsed.values) effective.set(path, value)
+    const diagnostics = validate(effective, unknownKeysIn(parsed.values.keys()))
+    expect(messagesAt(diagnostics, 'ui.tab_bar_right[0].bogus')).toHaveLength(1)
+    expect(messagesAt(diagnostics, 'keys.command[0].bogus')).toHaveLength(1)
+  })
+
+  it('names the value of a seconds field that is not a count', () => {
+    const diagnostics = validate(
+      config({
+        'ui.tab_bar_right': [
+          { type: 'command', command: 'ls', interval_seconds: -5 },
+          { type: 'command', command: 'ls', timeout_seconds: 'soon' },
+        ],
+      }),
+    )
+    expect(messagesAt(diagnostics, 'ui.tab_bar_right[0].interval_seconds')).toEqual([
+      'expected a non-negative integer, got -5',
+    ])
+    expect(messagesAt(diagnostics, 'ui.tab_bar_right[1].timeout_seconds')).toEqual([
+      'expected an integer, got a string',
+    ])
+  })
+
   it('warns about a command entry herdr would hide', () => {
     const diagnostics = validate(
       config({
@@ -472,6 +520,35 @@ describe('keybinding grammar', () => {
     expect(messagesAt(validate(config({ 'keys.prefix': 'ctrl+' })), 'keys.prefix')).toEqual([
       'invalid keybinding "ctrl+"; herdr will use ctrl+b',
     ])
+  })
+
+  it('lets the fallback prefix claim ctrl+b, as herdr does', () => {
+    // `herdr config check` prints both of these for this file.
+    const diagnostics = validate(config({ 'keys.prefix': 'nonsense', 'keys.help': 'ctrl+b' }))
+    expect(messagesAt(diagnostics, 'keys.prefix')).toEqual([
+      'invalid keybinding "nonsense"; herdr will use ctrl+b',
+    ])
+    expect(messagesAt(diagnostics, 'keys.help')).toEqual([
+      'ctrl+b: kept keys.prefix, disabled keys.help',
+    ])
+  })
+
+  it('reserves the fallback prefix even when keys.prefix is missing entirely', () => {
+    const effective = config()
+    effective.delete('keys.prefix')
+    effective.set('keys.help', 'ctrl+b')
+    expect(messagesAt(validate(effective), 'keys.help')).toEqual([
+      'ctrl+b: kept keys.prefix, disabled keys.help',
+    ])
+  })
+
+  it('rejects a chord whose modifier only exists on Object.prototype', () => {
+    for (const inherited of ['constructor+x', '__proto__+x']) {
+      const diagnostics = validate(config({ 'keys.help': inherited }))
+      expect(messagesAt(diagnostics, 'keys.help')).toEqual([
+        `invalid keybinding ${JSON.stringify(inherited)}; herdr will disable the binding`,
+      ])
+    }
   })
 
   it('rejects a keybinding that is not a string or a list of them', () => {
@@ -731,12 +808,18 @@ describe('cross-field rules', () => {
     ).toEqual(['ui.sidebar_width (90) is above sidebar_max_width (36); herdr will clamp it'])
   })
 
-  it('warns about a zero headless terminal size', () => {
+  it('warns about a zero headless terminal size, at whichever field is zero', () => {
     expect(
       messagesAt(validate(config({ 'server.headless_cols': 0 })), 'server.headless_cols'),
     ).toEqual([
       'server.headless_cols and server.headless_rows must be greater than zero (got 0x40)',
     ])
+    // herdr prints exactly one line for this file, naming both sizes.
+    const rowsOnly = validate(config({ 'server.headless_rows': 0 }))
+    expect(messagesAt(rowsOnly, 'server.headless_rows')).toEqual([
+      'server.headless_cols and server.headless_rows must be greater than zero (got 120x0)',
+    ])
+    expect(messagesAt(rowsOnly, 'server.headless_cols')).toEqual([])
   })
 })
 
@@ -791,7 +874,10 @@ describe('unknown keys', () => {
     expect(isKnownKey('keys.command[0].key')).toBe(true)
     expect(isKnownKey('keys.command[0].colour')).toBe(false)
     expect(isKnownKey('ui.tab_bar_right[2].interval_seconds')).toBe(true)
-    expect(isKnownKey('ui.tab_bar_right[2].nope')).toBe(false)
+    // Every field of a tab bar entry counts as known here, misspelt ones
+    // included, because which fields an entry may carry depends on its `type`
+    // and the entry rule owns that with a better message.
+    expect(isKnownKey('ui.tab_bar_right[2].nope')).toBe(true)
     expect(isKnownKey('ui.sidebar.agents.rows_by_agent.claude')).toBe(true)
     expect(isKnownKey('ui.sidebar_wdith')).toBe(false)
   })
@@ -833,30 +919,18 @@ command = "lazygit"
 /**
  * A whole file, checked against what herdr 0.8.2 itself prints for it.
  *
- * The expected diagnostics below were taken from `herdr config check` run on
- * exactly this text (`HERDR_CONFIG_PATH=… herdr config check`), so the test
- * fails if corral's rules drift from the binary's.
+ * Both halves are committed: `fixture-herdr-check.toml` is the config, and
+ * `fixture-herdr-check.txt` is the recorded output of
+ * `HERDR_CONFIG_PATH=… herdr config check` on it. The test reads the config
+ * from the fixture rather than repeating it, so the file the binary was run
+ * against and the file corral is checked against cannot drift; re-record the
+ * `.txt` on a herdr bump and the diff is the list of rules that moved.
  */
 describe('against herdr config check', () => {
-  const BAD_CONFIG = `[theme]
-name = "catppucin"
-
-[ui]
-sidebar_min_width = 40
-sidebar_max_width = 30
-accent = "octarine"
-window_title = "{host}"
-sidebar_wdith = 30
-
-[keys]
-rename_tab = "prefix+c"
-help = "x"
-navigate_pane_down = "esc"
-
-[[keys.command]]
-key = "prefix+alt+g"
-command = "  "
-`
+  /** herdr's own diagnostic lines, without this fixture's comment header. */
+  const HERDR_LINES = herdrCheckOutput
+    .split('\n')
+    .filter((line) => line.trim() !== '' && !line.startsWith('#') && !line.startsWith('config:'))
 
   /** Layer a parsed file over the documented defaults, the way the store will. */
   function effectiveOf(text: string) {
@@ -866,41 +940,45 @@ command = "  "
     return { effective, parsed }
   }
 
+  it('is checked against a recording of seven real diagnostics', () => {
+    expect(HERDR_LINES).toHaveLength(7)
+    // Spot-check the recording itself, so a truncated re-record is obvious.
+    expect(HERDR_LINES[0]).toBe('unknown config key ui.sidebar_wdith; ignoring key')
+  })
+
   it('reports every diagnostic the binary reports, at the right path', () => {
-    const { effective, parsed } = effectiveOf(BAD_CONFIG)
+    const { effective, parsed } = effectiveOf(herdrCheckConfig)
     const diagnostics = validate(
       effective,
       unknownKeysIn(parsed.values.keys()),
       parsed.values.keys(),
     )
 
-    // `herdr config check` printed exactly these seven, in its own order:
-    //   unknown config key ui.sidebar_wdith; ignoring key
-    //   navigate keybinding cannot use esc: keys.navigate_pane_down = "esc"; disabling binding
-    //   unsafe direct keybinding: keys.help = "x" would intercept typing; use "prefix+x" …
-    //   empty custom command: keys.command[0].command; disabling custom command
-    //   unknown theme name theme.name = "catppucin"; using "catppuccin"; valid themes: …
-    //   ui.window_title has unknown token '{host}'; leaving the outer terminal title alone
-    //   ui.sidebar_min_width (40) is greater than sidebar_max_width (30)
-    expect(diagnostics.map((diagnostic) => diagnostic.path)).toEqual([
-      'keys.command[0].command',
-      'keys.help',
-      'keys.navigate_pane_down',
-      'theme.name',
-      // herdr logs an unknown color through tracing rather than collecting it,
-      // so `config check` stays quiet about this one; corral says it out loud.
-      'ui.accent',
-      'ui.sidebar_min_width',
+    // One corral path per recorded herdr line, in the recording's order.
+    const paths = [
       'ui.sidebar_wdith',
+      'keys.navigate_pane_down',
+      'keys.help',
+      'keys.command[0].command',
+      'theme.name',
       'ui.window_title',
-    ])
+      'ui.sidebar_min_width',
+    ]
+    expect(HERDR_LINES).toHaveLength(paths.length)
+    expect(paths.filter((path) => at(diagnostics, path).length !== 1)).toEqual([])
+
+    // And nothing else, beyond the unknown color herdr logs through tracing
+    // rather than collecting (src/config/theme.rs:185-188).
+    expect(diagnostics.map((diagnostic) => diagnostic.path).sort()).toEqual(
+      [...paths, 'ui.accent'].sort(),
+    )
     expect(hasErrors(diagnostics)).toBe(false)
   })
 
   it('says nothing about the binding that merely displaces a default', () => {
     // The file rebinds `prefix+c` from keys.new_tab to keys.rename_tab and
     // herdr does not complain, because the loser is a default.
-    const { effective, parsed } = effectiveOf(BAD_CONFIG)
+    const { effective, parsed } = effectiveOf(herdrCheckConfig)
     const diagnostics = validate(effective, [], parsed.values.keys())
     expect(at(diagnostics, 'keys.rename_tab')).toEqual([])
   })

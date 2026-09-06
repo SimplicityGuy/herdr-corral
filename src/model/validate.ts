@@ -48,6 +48,11 @@
  * to what `herdr config check` actually printed for the same input.
  *
  * Every non-obvious rule cites `github.com/herdrdev/herdr` at tag `v0.8.2`.
+ *
+ * One house rule throughout: any lookup table whose key can come out of a config
+ * file is a `Map`, never an object literal. A plain object answers `constructor`
+ * and `__proto__` out of `Object.prototype`, which turns a value herdr rejects
+ * into one corral quietly accepts.
  */
 
 import {
@@ -197,23 +202,27 @@ export function isColor(text: string): boolean {
  * Spellings `canonical_theme_name` accepts on top of the built-in names
  * (src/config/theme.rs:25-47). The names themselves come from the schema, so a
  * herdr release that adds a theme needs no edit here.
+ *
+ * A `Map`, because the lookup key is the name out of the user's file: a plain
+ * object would answer `constructor` out of `Object.prototype` and pass an
+ * unknown theme name off as a real one.
  */
-const THEME_ALIASES: Readonly<Record<string, string>> = {
-  'catppuccin-mocha': 'catppuccin',
-  latte: 'catppuccin-latte',
-  light: 'catppuccin-latte',
-  tokyonight: 'tokyo-night',
-  'tokyo-day': 'tokyo-night-day',
-  'tokyonight-day': 'tokyo-night-day',
-  'gruvbox-dark': 'gruvbox',
-  onedark: 'one-dark',
-  onelight: 'one-light',
-  'solarized-dark': 'solarized',
-  lotus: 'kanagawa-lotus',
-  rosepine: 'rose-pine',
-  'rosepine-dawn': 'rose-pine-dawn',
-  dawn: 'rose-pine-dawn',
-}
+const THEME_ALIASES: ReadonlyMap<string, string> = new Map([
+  ['catppuccin-mocha', 'catppuccin'],
+  ['latte', 'catppuccin-latte'],
+  ['light', 'catppuccin-latte'],
+  ['tokyonight', 'tokyo-night'],
+  ['tokyo-day', 'tokyo-night-day'],
+  ['tokyonight-day', 'tokyo-night-day'],
+  ['gruvbox-dark', 'gruvbox'],
+  ['onedark', 'one-dark'],
+  ['onelight', 'one-light'],
+  ['solarized-dark', 'solarized'],
+  ['lotus', 'kanagawa-lotus'],
+  ['rosepine', 'rose-pine'],
+  ['rosepine-dawn', 'rose-pine-dawn'],
+  ['dawn', 'rose-pine-dawn'],
+])
 
 /**
  * The built-in theme `name` selects, or `null` when herdr would fall back.
@@ -225,7 +234,7 @@ const THEME_ALIASES: Readonly<Record<string, string>> = {
 export function canonicalThemeName(name: string): string | null {
   const normalized = name.toLowerCase().replaceAll(' ', '-').replaceAll('_', '-')
   if (themeNames().includes(normalized)) return normalized
-  return THEME_ALIASES[normalized] ?? null
+  return THEME_ALIASES.get(normalized) ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -262,17 +271,17 @@ const MAX_CUSTOM_SIDEBAR_TOKEN_LENGTH = 32
  * Everything herdr reads into a `u16` shares the same ceiling; the two settings
  * with a narrower rule of their own are listed explicitly.
  */
-const INTEGER_BOUNDS: Readonly<Record<string, { readonly max: number }>> = {
-  'server.headless_cols': { max: U16_MAX },
-  'server.headless_rows': { max: U16_MAX },
-  'ui.sidebar_width': { max: U16_MAX },
-  'ui.sidebar_min_width': { max: U16_MAX },
-  'ui.sidebar_max_width': { max: U16_MAX },
-  'ui.mobile_width_threshold': { max: U16_MAX },
-  'ui.sidebar.agents.row_gap': { max: U16_MAX },
-  'ui.sidebar.spaces.row_gap': { max: U16_MAX },
-  'ui.toast.delay_seconds': { max: MAX_TOAST_DELAY_SECONDS },
-}
+const INTEGER_BOUNDS: ReadonlyMap<string, number> = new Map([
+  ['server.headless_cols', U16_MAX],
+  ['server.headless_rows', U16_MAX],
+  ['ui.sidebar_width', U16_MAX],
+  ['ui.sidebar_min_width', U16_MAX],
+  ['ui.sidebar_max_width', U16_MAX],
+  ['ui.mobile_width_threshold', U16_MAX],
+  ['ui.sidebar.agents.row_gap', U16_MAX],
+  ['ui.sidebar.spaces.row_gap', U16_MAX],
+  ['ui.toast.delay_seconds', MAX_TOAST_DELAY_SECONDS],
+])
 
 /** Navigate-mode movement, which plays by its own rules (see `keys.ts`). */
 const NAVIGATE_KEYS: readonly string[] = [
@@ -300,6 +309,12 @@ const LEGACY_INDEXED_KEYS: readonly string[] = [
   'keys.indexed.workspaces',
   'keys.indexed.agents',
 ]
+
+/**
+ * The prefix herdr falls back to when `keys.prefix` will not parse
+ * (src/config/keybinds.rs:442-446).
+ */
+const DEFAULT_PREFIX_LABEL = 'ctrl+b'
 
 /** Chord-valued settings the schema types as plain strings. */
 const CHORD_STRING_KEYS: readonly string[] = ['keys.prefix', 'keys.remote_image_paste']
@@ -377,15 +392,18 @@ const COMMAND_TYPES: readonly string[] = ['shell', 'pane', 'popup', 'plugin_acti
  * a stray field is silently dropped, and corral is the only one who will say so.
  * Both behaviours are verified against `herdr config check` in the tests.
  */
-const TAB_BAR_ENTRY_FIELDS: Readonly<
-  Record<string, { readonly required: readonly string[]; readonly optional: readonly string[] }>
-> = {
-  zoom: { required: [], optional: [] },
-  hostname: { required: [], optional: [] },
-  datetime: { required: [], optional: ['format'] },
-  text: { required: ['text'], optional: [] },
-  command: { required: ['command'], optional: ['interval_seconds', 'timeout_seconds'] },
+interface TabBarEntryShape {
+  readonly required: readonly string[]
+  readonly optional: readonly string[]
 }
+
+const TAB_BAR_ENTRY_FIELDS: ReadonlyMap<string, TabBarEntryShape> = new Map([
+  ['zoom', { required: [], optional: [] }],
+  ['hostname', { required: [], optional: [] }],
+  ['datetime', { required: [], optional: ['format'] }],
+  ['text', { required: ['text'], optional: [] }],
+  ['command', { required: ['command'], optional: ['interval_seconds', 'timeout_seconds'] }],
+] satisfies readonly (readonly [string, TabBarEntryShape])[])
 
 /** Tokens `ui.window_title` substitutes (src/config/window_title.rs:36-43). */
 const WINDOW_TITLE_TOKENS: readonly string[] = [
@@ -452,15 +470,6 @@ function shapeOf(segments: readonly (string | number)[]): string {
   return shape
 }
 
-/** Every field name any `ui.tab_bar_right` entry type accepts. */
-const TAB_BAR_ENTRY_ALL_FIELDS: ReadonlySet<string> = new Set([
-  'type',
-  ...Object.values(TAB_BAR_ENTRY_FIELDS).flatMap((entry) => [
-    ...entry.required,
-    ...entry.optional,
-  ]),
-])
-
 /**
  * True when herdr has somewhere to put this path.
  *
@@ -493,7 +502,11 @@ export function isKnownKey(path: string): boolean {
 
   if (typeof last !== 'string') return false
   if (shape === `keys.command[].${last}`) return COMMAND_FIELDS.includes(last)
-  if (shape === `ui.tab_bar_right[].${last}`) return TAB_BAR_ENTRY_ALL_FIELDS.has(last)
+  // Every field of an entry counts as known, even a misspelt one. Which fields
+  // an entry may carry depends on its `type`, so `checkTabBarEntry` owns that
+  // rule and says which type rejected it; letting the unknown-key pass have an
+  // opinion too would only report the same field twice.
+  if (shape === `ui.tab_bar_right[].${last}`) return true
 
   return false
 }
@@ -579,9 +592,9 @@ function checkInteger(path: string, value: TomlValue, out: Diagnostics): void {
     out.error(path, `expected a non-negative integer, got ${value}`)
     return
   }
-  const bound = INTEGER_BOUNDS[path]
-  if (bound !== undefined && value > bound.max) {
-    out.error(path, `must be between 0 and ${bound.max}, got ${value}`)
+  const max = INTEGER_BOUNDS.get(path)
+  if (max !== undefined && value > max) {
+    out.error(path, `must be between 0 and ${max}, got ${value}`)
   }
 }
 
@@ -921,8 +934,12 @@ function checkSeconds(
   max: number,
   out: Diagnostics,
 ): void {
-  if (!isInteger(value) || value < 0) {
-    out.error(path, `expected a non-negative integer, got ${typeWord(value)}`)
+  if (!isInteger(value)) {
+    out.error(path, `expected an integer, got ${typeWord(value)}`)
+    return
+  }
+  if (value < 0) {
+    out.error(path, `expected a non-negative integer, got ${value}`)
     return
   }
   // Zero and over-max both parse; herdr hides the entry and warns
@@ -944,7 +961,8 @@ function checkTabBarEntry(path: string, entry: TomlValue, out: Diagnostics): voi
     )
     return
   }
-  const shape = TAB_BAR_ENTRY_FIELDS[type]
+  const shape = TAB_BAR_ENTRY_FIELDS.get(type)
+  if (shape === undefined) return
   for (const field of shape.required) {
     if (entry[field] === undefined) {
       out.error(`${path}.${field}`, `a ${type} entry needs a \`${field}\` field`)
@@ -1159,27 +1177,36 @@ function checkKeybindings(
   // Navigate mode keeps a registry of its own, so a navigate binding never
   // collides with a prefix-mode action (src/config/keybinds.rs:456-460).
   const prefixSource = sourceOf('keys.prefix')
-  const actions: Registry = { claimed: new Map(), prefixLabel: 'ctrl+b', prefixSource }
-  const navigate: Registry = { claimed: new Map(), prefixLabel: 'ctrl+b', prefixSource }
+  const actions: Registry = { claimed: new Map(), prefixLabel: DEFAULT_PREFIX_LABEL, prefixSource }
+  const navigate: Registry = {
+    claimed: new Map(),
+    prefixLabel: DEFAULT_PREFIX_LABEL,
+    prefixSource,
+  }
 
+  // There is always a prefix, and it is always reserved. herdr parses
+  // `keys.prefix`, falls back to `ctrl+b` when it will not parse, and registers
+  // whichever it ended up with in both registries
+  // (src/config/keybinds.rs:442-459) — so a binding on the fallback collides
+  // with the prefix just as a binding on a good one does.
   const rawPrefix = effective.get('keys.prefix')
-  if (rawPrefix !== undefined) {
-    if (typeof rawPrefix !== 'string') {
-      out.error('keys.prefix', `expected a string, got ${typeWord(rawPrefix)}`)
-    } else {
-      const chord = parseChord(rawPrefix)
-      if (chord === null) {
-        out.warn('keys.prefix', `invalid keybinding ${show(rawPrefix)}; herdr will use ctrl+b`)
-      } else {
-        const label = formatChord(chord)
-        const claim: Claim = { field: 'keys.prefix', source: prefixSource }
-        actions.prefixLabel = label
-        navigate.prefixLabel = label
-        actions.claimed.set(label, claim)
-        navigate.claimed.set(label, claim)
-      }
+  let prefixChord: Chord | null = null
+  if (rawPrefix === undefined) {
+    // nothing to say; the fallback below is also herdr's default
+  } else if (typeof rawPrefix !== 'string') {
+    out.error('keys.prefix', `expected a string, got ${typeWord(rawPrefix)}`)
+  } else {
+    prefixChord = parseChord(rawPrefix)
+    if (prefixChord === null) {
+      out.warn('keys.prefix', `invalid keybinding ${show(rawPrefix)}; herdr will use ctrl+b`)
     }
   }
+  const prefixLabel = prefixChord === null ? DEFAULT_PREFIX_LABEL : formatChord(prefixChord)
+  const prefixClaim: Claim = { field: 'keys.prefix', source: prefixSource }
+  actions.prefixLabel = prefixLabel
+  navigate.prefixLabel = prefixLabel
+  actions.claimed.set(prefixLabel, prefixClaim)
+  navigate.claimed.set(prefixLabel, prefixClaim)
 
   const rawPaste = effective.get('keys.remote_image_paste')
   if (rawPaste !== undefined) {
@@ -1370,8 +1397,8 @@ function checkCommands(
 function integerAt(effective: EffectiveConfig, path: string): number | null {
   const value = effective.get(path)
   if (value === undefined || !isInteger(value) || value < 0) return null
-  const bound = INTEGER_BOUNDS[path]
-  return bound !== undefined && value > bound.max ? null : value
+  const max = INTEGER_BOUNDS.get(path)
+  return max !== undefined && value > max ? null : value
 }
 
 function checkCrossFields(effective: EffectiveConfig, out: Diagnostics): void {
@@ -1406,10 +1433,11 @@ function checkCrossFields(effective: EffectiveConfig, out: Diagnostics): void {
 
   const cols = integerAt(effective, 'server.headless_cols')
   const rows = integerAt(effective, 'server.headless_rows')
-  if ((cols === 0 || rows === 0) && cols !== null && rows !== null) {
-    // src/config.rs:107-114 — herdr falls back to 120x40.
+  if (cols !== null && rows !== null && (cols === 0 || rows === 0)) {
+    // src/config.rs:107-114 — one diagnostic naming both sizes, as herdr does,
+    // anchored at whichever of the two is actually zero.
     out.warn(
-      'server.headless_cols',
+      cols === 0 ? 'server.headless_cols' : 'server.headless_rows',
       `server.headless_cols and server.headless_rows must be greater than zero (got ${cols}x${rows})`,
     )
   }
