@@ -10,6 +10,7 @@ import { SAMPLE_AGENTS, SAMPLE_SPACES, type TokenSubject } from '@/components/pr
 import {
   type RowContext,
   cssColor,
+  parseColor,
   renderRow,
   renderRows,
   renderToken,
@@ -19,7 +20,7 @@ import {
   tokenColor,
   tokenText,
 } from '@/components/preview/tokens'
-import { paletteOf, sidebarTokenBuiltins } from '@/schema'
+import { paletteOf, sidebarTokenBuiltins, themeNames, themeTokens } from '@/schema'
 import { describe, expect, it } from 'vitest'
 
 const palette = resolvePalette({ theme: 'catppuccin', custom: {} })
@@ -104,11 +105,29 @@ describe('status indicators', () => {
   })
 })
 
+describe('agent states', () => {
+  it('spells a blocked agent the way herdr does', () => {
+    // herdr's states are idle, working, blocked, done and unknown — the words in
+    // the prose above `status_indicators` and the ones `herdr agent wait --until`
+    // takes. "waiting" is not one of them.
+    expect(codex.state).toBe('blocked')
+    expect(tokenText('state_text', codex, context)).toBe('blocked')
+  })
+})
+
 describe('custom tokens', () => {
   it('draws a $name from the subject metadata', () => {
     expect(tokenText('$model', claude, context)).toBe('opus-5')
     expect(tokenText('$ticket', claude, context)).toBe('PHZ-412')
     expect(tokenText('$jj_status', phaze, context)).toBe('@ wqrs')
+  })
+
+  it('is how the sample carries what no built-in token names', () => {
+    // How long an agent has been in its state and how many agents a space holds
+    // have no built-in token, so they are metadata — which means a row can ask
+    // for them, and does here.
+    expect(rowText(renderRow(['state_text', '$age'], claude, context))).toBe('working 12m')
+    expect(rowText(renderRow(['workspace', '$agents'], phaze, context))).toBe('phaze 2')
   })
 
   it('draws nothing when nothing reported the value', () => {
@@ -207,18 +226,63 @@ describe('palette', () => {
     expect(accented.accent).toBe('#222222')
   })
 
-  it('resolves a reset slot against catppuccin rather than leaving it unpainted', () => {
+  it('resolves a reset slot to something of the same kind, not to the ink', () => {
     // Every built-in theme leaves `sidebar_bg` at `reset`; the preview lands it on
     // the panel background, which is where herdr lands it.
+    const catppuccin = resolvePalette({ theme: 'catppuccin', custom: {} })
+    expect(catppuccin.sidebar_bg).toBe(catppuccin.panel_bg)
+    expect(catppuccin.sidebar_bg).not.toBe(catppuccin.text)
+
     const terminal = resolvePalette({ theme: 'terminal', custom: {} })
     expect(terminal.sidebar_bg).toBe(terminal.panel_bg)
     expect(terminal.text).toBe(paletteOf('catppuccin')?.text)
+  })
+
+  it.each(['reset', 'default', 'none', 'transparent', ''])(
+    'reads a user-written %s as unset rather than as a colour',
+    (written) => {
+      // The bug this pins: a background slot whose value was `reset` came out the
+      // *text* colour and swallowed every row drawn on it.
+      const painted = resolvePalette({ theme: 'catppuccin', custom: { sidebar_bg: written } })
+      const untouched = resolvePalette({ theme: 'catppuccin', custom: {} })
+      expect(painted.sidebar_bg).toBe(untouched.sidebar_bg)
+      expect(painted.sidebar_bg).not.toBe(painted.text)
+    },
+  )
+
+  it('still takes a hex a user did write for that slot', () => {
+    const painted = resolvePalette({ theme: 'catppuccin', custom: { sidebar_bg: '#101010' } })
+    expect(painted.sidebar_bg).toBe('#101010')
+  })
+
+  it('follows the theme in force when a slot resets, not catppuccin', () => {
+    const gruvbox = resolvePalette({ theme: 'gruvbox', custom: { sidebar_bg: 'reset' } })
+    expect(gruvbox.sidebar_bg).toBe(gruvbox.panel_bg)
+    expect(gruvbox.panel_bg).toBe(paletteOf('gruvbox')?.panel_bg)
+  })
+
+  it('paints every slot, whatever the theme leaves at reset', () => {
+    for (const theme of themeNames()) {
+      const painted = resolvePalette({ theme, custom: {} })
+      for (const slot of themeTokens()) {
+        expect(painted[slot], `${theme}.${slot}`).toMatch(/^(#|rgb\()/)
+      }
+    }
   })
 
   it('falls back to catppuccin for a theme themes.json does not have', () => {
     expect(resolvePalette({ theme: 'no-such-theme', custom: {} })).toEqual(
       resolvePalette({ theme: 'catppuccin', custom: {} }),
     )
+  })
+
+  it('reports a value that names no colour of its own', () => {
+    expect(parseColor('reset')).toBeNull()
+    expect(parseColor('')).toBeNull()
+    expect(parseColor('   ')).toBeNull()
+    expect(parseColor(undefined)).toBeNull()
+    expect(parseColor('not a colour')).toBeNull()
+    expect(parseColor('#89b4fa')).toBe('#89b4fa')
   })
 
   it('translates the colour syntaxes herdr accepts', () => {

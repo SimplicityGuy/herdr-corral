@@ -7,7 +7,9 @@
  * if a test needs a second `render` to see a change, the preview is not live.
  */
 import { HerdrPreview } from '@/components/preview/HerdrPreview'
+import { resolvePalette } from '@/components/preview/tokens'
 import type { TomlValue } from '@/model/parse'
+import { themeTokens } from '@/schema'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore } from '@/store/shell'
 import { act, render, screen, within } from '@testing-library/react'
@@ -36,6 +38,15 @@ function frame(): HTMLElement {
 
 function agentRow(agent: string): HTMLElement {
   return screen.getByRole('button', { name: `agent ${agent}` })
+}
+
+/** A palette hex as the browser writes it back out of an inline style. */
+function rgbOf(hex: string): string {
+  const digits =
+    hex.length === 4
+      ? [...hex.slice(1)].map((digit) => digit + digit)
+      : [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)]
+  return `rgb(${digits.map((pair) => Number.parseInt(pair, 16)).join(', ')})`
 }
 
 describe('the sidebar', () => {
@@ -225,6 +236,23 @@ describe('the sidebar rows', () => {
     expect(agentRow('codex')).toHaveTextContent('!')
   })
 
+  it('spells the blocked agent the way herdr does', () => {
+    render(<HerdrPreview />)
+    set('ui.sidebar.agents.rows', [['agent', 'state_text']])
+
+    expect(agentRow('codex')).toHaveTextContent('codexblocked')
+    expect(agentRow('codex')).not.toHaveTextContent('waiting')
+  })
+
+  it('marks the row the sidebar cursor is on with selection_bg', () => {
+    render(<HerdrPreview />)
+    // herdr paints an active row and a selected row differently, so the mock has
+    // to show both: the active space band and the cursor's agent row.
+    set('theme.custom.selection_bg', '#010203')
+    expect(agentRow('claude').style.background).toBe('rgb(1, 2, 3)')
+    expect(agentRow('codex').style.background).toBe('')
+  })
+
   it('opens the rows out on row_gap', () => {
     render(<HerdrPreview />)
     expect(part('agents')?.style.rowGap).toBe('0em')
@@ -245,6 +273,7 @@ describe('the sidebar rows', () => {
     // By space: the sample's space order is phaze, phaze/docs, homelab, gruvax.
     expect(order()).toEqual(['claude', 'gemini', 'pi', 'codex'])
 
+    // Blocked first: the attention queue leads with the agent waiting on a person.
     set('ui.agent_panel_sort', 'priority')
     expect(order()).toEqual(['codex', 'claude', 'pi', 'gemini'])
   })
@@ -301,6 +330,14 @@ describe('the panes', () => {
 })
 
 describe('the toast', () => {
+  it('says how long herdr waits before delivering it', () => {
+    render(<HerdrPreview />)
+    expect(part('toast-delay')).toHaveTextContent('after 1s')
+
+    set('ui.toast.delay_seconds', 5)
+    expect(part('toast-delay')).toHaveTextContent('after 5s')
+  })
+
   it('moves to the corner ui.toast.herdr.position names', () => {
     render(<HerdrPreview />)
     const toast = () => screen.getByRole('button', { name: /notification toast/ })
@@ -326,7 +363,47 @@ describe('the toast', () => {
   })
 })
 
+describe('the palette', () => {
+  it('can paint every slot themes.json defines', () => {
+    render(<HerdrPreview />)
+    // A slot nothing can paint is a setting the preview silently ignores, which
+    // is the one thing a preview must not do. Two of them need the config to ask
+    // for them — a delivered toast, and a row with a custom token — so the mock
+    // is put in the state that shows everything before the sweep.
+    set('ui.toast.delivery', 'herdr')
+    set('ui.sidebar.agents.rows', [['state_icon', 'workspace', 'tab'], ['agent', '$model']])
+    const painted = new Set<string>()
+    for (const node of document.querySelectorAll<HTMLElement>('[data-preview] *')) {
+      for (const property of ['color', 'background', 'backgroundColor', 'borderColor'] as const) {
+        const value = node.style[property]
+        if (value !== '') painted.add(value)
+      }
+      // Borders are written as a shorthand, so the colour is inside the string.
+      if (node.style.border !== '') painted.add(node.style.border)
+      if (node.style.borderRight !== '') painted.add(node.style.borderRight)
+      if (node.style.borderBottom !== '') painted.add(node.style.borderBottom)
+    }
+    const all = [...painted].join(' | ')
+    const palette = resolvePalette({ theme: 'catppuccin', custom: {} })
+    for (const slot of themeTokens()) {
+      expect(all, `${slot} (${palette[slot]}) is never painted`).toContain(rgbOf(palette[slot]))
+    }
+  })
+})
+
 describe('the mobile layout', () => {
+  it('crosses over at the threshold, which herdr counts as mobile', () => {
+    render(<HerdrPreview />)
+    expect(frame().dataset.mobile).toBe('false')
+
+    // "at or below which Herdr uses the mobile single-column layout": 120 columns
+    // against a threshold of 120 is mobile, and 119 is not.
+    set('ui.mobile_width_threshold', 119)
+    expect(frame().dataset.mobile).toBe('false')
+    set('ui.mobile_width_threshold', 120)
+    expect(frame().dataset.mobile).toBe('true')
+  })
+
   it('crosses over when ui.mobile_width_threshold passes the simulated width', () => {
     render(<HerdrPreview />)
     expect(frame().dataset.mobile).toBe('false')

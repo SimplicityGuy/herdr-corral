@@ -15,12 +15,24 @@
  * string in a test, in a screenshot and on screen, and a live clock renders three
  * different ones.
  *
+ * Anything herdr has no built-in token for — how long an agent has been in its
+ * state, how many agents a space holds — is carried as **metadata**, not as a
+ * typed field, because metadata is the one way such a value can actually reach a
+ * row: `$age` and `$agents` draw them, the same way `$jj_status` draws a value a
+ * workspace provider reported. A field no token can name would be data the mock
+ * can never show.
+ *
  * This is data, not configuration. Nothing here is read from the user's file and
  * nothing here is written back to it.
  */
 
-/** The five states herdr's `status_indicators` distinguishes. */
-export type AgentState = 'working' | 'waiting' | 'idle' | 'done' | 'unknown'
+/**
+ * The five states herdr's `status_indicators` distinguishes, spelled as herdr
+ * spells them: "blocked, working, done, idle, and unknown" — the words in the
+ * prose above `status_indicators` in its own default config, and the ones
+ * `herdr agent wait --until` takes. An agent waiting on a person is `blocked`.
+ */
+export type AgentState = 'working' | 'blocked' | 'idle' | 'done' | 'unknown'
 
 /**
  * What a token row is drawn from.
@@ -47,15 +59,11 @@ export interface SampleSpace extends TokenSubject {
   readonly id: string
   /** 0 for a workspace, 1 for a worktree hanging off the one above it. */
   readonly depth: number
-  /** How many agents are attached, as herdr prints beside the name. */
-  readonly agents: number
 }
 
 export interface SampleAgent extends TokenSubject {
   /** The canonical agent id — what `rows_by_agent` is keyed by. */
   readonly agent: string
-  /** How long it has been in this state, for the `state_text` line. */
-  readonly age: string
 }
 
 export interface SampleTab {
@@ -108,42 +116,38 @@ export const SAMPLE_SPACES: readonly SampleSpace[] = [
   {
     id: 'phaze',
     depth: 0,
-    agents: 2,
     state: 'working',
     workspace: 'phaze',
     branch: 'main',
     git_status: '+2 ~1',
-    metadata: { jj_status: '@ wqrs', ahead: '2' },
+    metadata: { jj_status: '@ wqrs', ahead: '2', agents: '2' },
   },
   {
     id: 'phaze-docs',
     depth: 1,
-    agents: 0,
     state: 'idle',
     workspace: 'phaze/docs',
     branch: 'docs/console',
     git_status: 'clean',
-    metadata: { jj_status: '@ mnop' },
+    metadata: { jj_status: '@ mnop', agents: '1' },
   },
   {
     id: 'homelab',
     depth: 0,
-    agents: 1,
     state: 'done',
     workspace: 'homelab',
     branch: 'main',
     git_status: 'clean',
-    metadata: { jj_status: '@ zzyx' },
+    metadata: { jj_status: '@ zzyx', agents: '1' },
   },
   {
     id: 'gruvax',
     depth: 0,
-    agents: 1,
-    state: 'waiting',
+    state: 'blocked',
     workspace: 'gruvax',
     branch: 'feat/api',
     git_status: '~3',
-    metadata: { jj_status: '@ abcd' },
+    metadata: { jj_status: '@ abcd', agents: '1' },
   },
 ]
 
@@ -152,47 +156,43 @@ export const SAMPLE_AGENTS: readonly SampleAgent[] = [
   {
     agent: 'claude',
     state: 'working',
-    age: '12m',
     workspace: 'phaze',
     tab: 'api',
     pane: '1',
     terminal_title: '✳ claude — src/api/routes.py',
     terminal_title_stripped: 'claude — src/api/routes.py',
-    metadata: { model: 'opus-5', ticket: 'PHZ-412' },
+    metadata: { model: 'opus-5', ticket: 'PHZ-412', age: '12m' },
   },
   {
     agent: 'codex',
-    state: 'waiting',
-    age: '3m',
+    state: 'blocked',
     workspace: 'gruvax',
     tab: 'api',
     pane: '2',
     terminal_title: '● codex — approve edit?',
     terminal_title_stripped: 'codex — approve edit?',
-    metadata: { model: 'gpt-5-codex', ticket: 'GVX-88' },
+    metadata: { model: 'gpt-5-codex', ticket: 'GVX-88', age: '3m' },
   },
   {
     agent: 'gemini',
     state: 'idle',
-    age: '1h',
     workspace: 'phaze/docs',
     tab: 'docs',
     pane: '1',
     terminal_title: 'gemini',
     terminal_title_stripped: 'gemini',
     // No `$ticket`: a custom token with nothing behind it draws nothing.
-    metadata: { model: 'gemini-3-pro' },
+    metadata: { model: 'gemini-3-pro', age: '1h' },
   },
   {
     agent: 'pi',
     state: 'done',
-    age: '20m',
     workspace: 'homelab',
     tab: 'infra',
     pane: '3',
     terminal_title: '✓ pi — 25 passed',
     terminal_title_stripped: 'pi — 25 passed',
-    metadata: { model: 'pi-2', ticket: 'HML-9' },
+    metadata: { model: 'pi-2', ticket: 'HML-9', age: '20m' },
   },
 ]
 
@@ -226,10 +226,20 @@ export const SAMPLE_PANES: readonly SamplePane[] = [
       { mark: '~/phaze ❯', tone: 'blue', text: 'git status -sb' },
       { text: '## main...origin/main', dim: true },
       { text: ' M src/api/routes.py', dim: true },
+      { mark: '??', tone: 'red', text: 'notes.md' },
       { mark: '~/phaze ❯', tone: 'blue', text: '▌' },
     ],
   },
 ]
+
+/**
+ * The agent the sidebar's cursor is on.
+ *
+ * herdr paints the *active* row and the *selected* row differently —
+ * `active_row_bg` and `selection_bg` — so the mock needs both to exist for
+ * either to mean anything.
+ */
+export const SAMPLE_FOCUSED_AGENT = 'claude'
 
 /** The notification the toast region draws. */
 export const SAMPLE_TOAST = {

@@ -84,27 +84,78 @@ const ANSI: Readonly<Record<string, string>> = {
 const RESET = new Set(['reset', 'default', 'none', 'transparent'])
 
 /**
- * A herdr colour as a CSS colour, or `fallback` when it names the terminal's own.
+ * The two colours a chain of fallbacks ends at: a terminal's ground and its ink.
  *
- * An unparseable value also takes the fallback: `validate()` is what tells the
- * user their colour is wrong, and a preview that paints such a value black would
- * be a second, worse diagnostic.
+ * A browser has neither, so these are catppuccin's, which is also what herdr
+ * falls back to when it has no theme.
  */
-export function cssColor(value: TomlValue | undefined, fallback: string): string {
-  if (typeof value !== 'string') return fallback
+const GROUND = '#1e1e2e'
+const INK = '#cdd6f4'
+
+/**
+ * A herdr colour as a CSS colour, or `null` when it names no colour of its own.
+ *
+ * `null` covers three cases the caller has to tell apart from a real colour, and
+ * cannot once a fallback has been substituted: the slot is unset, the user wrote
+ * `reset` (or cleared the field, which is an empty string), or the value is not
+ * a colour at all. A wrong colour is `validate()`'s to report; painting a guess
+ * here would be a second, worse diagnostic.
+ */
+export function parseColor(value: TomlValue | undefined): string | null {
+  if (typeof value !== 'string') return null
   const text = value.trim().toLowerCase()
-  if (text === '' || RESET.has(text)) return fallback
+  if (text === '' || RESET.has(text)) return null
   if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/.test(text)) return text
   if (/^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/.test(text)) return text
-  return ANSI[text] ?? fallback
+  return ANSI[text] ?? null
 }
+
+/** {@link parseColor}, with something to paint when it answers nothing. */
+export function cssColor(value: TomlValue | undefined, fallback: string): string {
+  return parseColor(value) ?? fallback
+}
+
+/**
+ * Where a slot lands when nothing paints it — neither the theme nor the user.
+ *
+ * Resolved *inside the palette being built*, so a `reset` follows the theme in
+ * force rather than jumping back to catppuccin: under gruvbox, a reset sidebar
+ * is gruvbox's panel background. Every chain ends at `surface_dim` or `text`,
+ * which are the two slots that have nowhere further to fall.
+ *
+ * This is the fix for the bug that made a reset sidebar unreadable: the slot has
+ * to fall back to something with the same *role*, and a background that falls
+ * back to a foreground swallows every row drawn on it.
+ */
+const RESET_TARGET: Readonly<Record<string, string>> = {
+  sidebar_bg: 'panel_bg',
+  panel_bg: 'surface_dim',
+  active_row_bg: 'surface_dim',
+  selection_bg: 'surface0',
+  surface0: 'surface_dim',
+  surface1: 'surface0',
+  overlay1: 'overlay0',
+  overlay0: 'subtext0',
+  subtext0: 'text',
+}
+
+/** Slots that paint a surface. The rest paint ink, and fall back to ink. */
+const BACKGROUND_SLOTS: ReadonlySet<string> = new Set([
+  'panel_bg',
+  'sidebar_bg',
+  'active_row_bg',
+  'selection_bg',
+  'surface_dim',
+  'surface0',
+  'surface1',
+])
 
 export interface PaletteInput {
   /** The built-in theme's canonical name; unknown names take the fallback. */
   readonly theme: string
   /** `[theme.custom]` overrides, keyed by slot. */
   readonly custom: Readonly<Record<string, TomlValue | undefined>>
-  /** `ui.accent`, which wins the `accent` slot when it is set. */
+  /** `ui.accent`, which wins the `accent` slot when it is a colour. */
   readonly accent?: TomlValue
 }
 
@@ -112,31 +163,48 @@ export interface PaletteInput {
  * `themes.json` ⊕ `[theme.custom]` ⊕ `ui.accent`.
  *
  * Every slot comes out a CSS colour, so a component can paint with it without
- * asking whether the user wrote `reset`.
+ * asking whether the user wrote `reset` — and every slot comes out a colour of
+ * the *right kind*, so a background is never resolved to a foreground.
+ *
+ * The three layers are tried in order and the first that names a colour wins,
+ * which is what makes a cleared `[theme.custom]` field fall through to the theme
+ * rather than to nothing.
  */
 export function resolvePalette(input: PaletteInput): Palette {
   const base = paletteOf(input.theme) ?? paletteOf(FALLBACK_THEME) ?? {}
-  const fallbacks = paletteOf(FALLBACK_THEME) ?? {}
+  const ultimate = paletteOf(FALLBACK_THEME) ?? {}
   const out: Record<string, string> = {}
-  for (const slot of themeTokens()) {
-    const fallback = cssColor(fallbacks[slot], '#cdd6f4')
-    const custom = input.custom[slot]
-    const chosen = custom === undefined || custom === null ? base[slot] : custom
-    out[slot] = cssColor(chosen, fallback)
-  }
-  // `ui.accent` is herdr's one accent setting outside `[theme.custom]`, and it is
-  // the later word, so it wins the slot when the user set it to a colour.
-  if (input.accent !== undefined && input.accent !== null) {
-    out.accent = cssColor(input.accent, out.accent)
-  }
-  // A sidebar that is `reset` in every built-in theme has to land somewhere, and
-  // the panel background is where herdr lands it.
-  if (input.custom.sidebar_bg === undefined || input.custom.sidebar_bg === null) {
-    const themeSidebar = base.sidebar_bg
-    if (typeof themeSidebar !== 'string' || RESET.has(themeSidebar.trim().toLowerCase())) {
-      out.sidebar_bg = out.panel_bg
+
+  const resolve = (slot: string, seen: ReadonlySet<string>): string => {
+    const done = out[slot]
+    if (done !== undefined) return done
+    const ground = BACKGROUND_SLOTS.has(slot) ? GROUND : INK
+    // A cycle would mean RESET_TARGET has been edited into a loop; answer the
+    // ground rather than recurring forever.
+    if (seen.has(slot)) return ground
+
+    const layers: (TomlValue | undefined)[] = [input.custom[slot], base[slot]]
+    // `ui.accent` is herdr's one accent setting outside `[theme.custom]`, and it
+    // is the later word, so it goes on top of both.
+    if (slot === 'accent') layers.unshift(input.accent)
+
+    let painted: string | null = null
+    for (const layer of layers) {
+      painted = parseColor(layer)
+      if (painted !== null) break
     }
+    if (painted === null) {
+      const target = RESET_TARGET[slot]
+      painted =
+        target === undefined
+          ? cssColor(ultimate[slot], ground)
+          : resolve(target, new Set([...seen, slot]))
+    }
+    out[slot] = painted
+    return painted
   }
+
+  for (const slot of themeTokens()) resolve(slot, new Set())
   return out
 }
 
@@ -147,7 +215,7 @@ export function resolvePalette(input: PaletteInput): Palette {
 /** `status_indicators = "dots"` — one mark, told apart by colour. */
 const DOTS: Readonly<Record<AgentState, string>> = {
   working: '●',
-  waiting: '●',
+  blocked: '●',
   done: '●',
   idle: '○',
   unknown: '●',
@@ -156,7 +224,7 @@ const DOTS: Readonly<Record<AgentState, string>> = {
 /** `status_indicators = "symbols"` — a distinct static glyph per state. */
 const SYMBOLS: Readonly<Record<AgentState, string>> = {
   working: '▶',
-  waiting: '!',
+  blocked: '!',
   done: '✓',
   idle: '·',
   unknown: '?',
@@ -165,7 +233,7 @@ const SYMBOLS: Readonly<Record<AgentState, string>> = {
 /** Which palette slot colours each state. */
 const STATE_SLOT: Readonly<Record<AgentState, string>> = {
   working: 'green',
-  waiting: 'yellow',
+  blocked: 'yellow',
   done: 'blue',
   idle: 'overlay0',
   unknown: 'overlay1',
@@ -174,7 +242,7 @@ const STATE_SLOT: Readonly<Record<AgentState, string>> = {
 /** The word `state_text` draws. */
 const STATE_TEXT: Readonly<Record<AgentState, string>> = {
   working: 'working',
-  waiting: 'waiting',
+  blocked: 'blocked',
   done: 'done',
   idle: 'idle',
   unknown: 'unknown',

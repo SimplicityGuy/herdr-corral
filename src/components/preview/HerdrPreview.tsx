@@ -43,6 +43,7 @@ import {
 } from '@/components/preview/regions'
 import {
   SAMPLE_AGENTS,
+  SAMPLE_FOCUSED_AGENT,
   SAMPLE_HOSTNAME,
   SAMPLE_NOW,
   SAMPLE_PANES,
@@ -65,6 +66,7 @@ import {
   stateIcon,
   tokenColor,
 } from '@/components/preview/tokens'
+import { shortAnchor } from '@/lib/popover'
 import { homeOf } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 import type { TomlValue } from '@/model/parse'
@@ -193,9 +195,9 @@ function statusEntries(values: Values): readonly StatusEntry[] {
   return out
 }
 
-/** Waiting first, then working, then done, then idle — herdr's `priority` order. */
+/** Blocked first, then working, then done, then idle — herdr's `priority` order. */
 const PRIORITY: Readonly<Record<AgentState, number>> = {
-  waiting: 0,
+  blocked: 0,
   working: 1,
   done: 2,
   idle: 3,
@@ -276,7 +278,15 @@ function Region({
         // clears any open editor, which is why it comes before `openEditor` and
         // not after.
         setSection(homeOf(key))
-        openEditor({ key, anchor: anchorOf(event.currentTarget), region: id })
+        // A region can be the full height of the frame — the sidebar's edge, a
+        // pane, the pane area behind the toast. Anchoring to all of it would put
+        // the popover off the bottom of a window the shell does not scroll, so
+        // it is cropped to the row the pointer was on.
+        openEditor({
+          key,
+          anchor: shortAnchor(anchorOf(event.currentTarget), event.clientY),
+          region: id,
+        })
       }}
     >
       {children}
@@ -386,7 +396,9 @@ export function HerdrPreview() {
 
   const threshold = num(values, 'ui.mobile_width_threshold', 64)
   const columns = columnsOverride ?? DESKTOP_COLUMNS
-  const mobile = columns < threshold
+  // "Terminal width **at or below** which Herdr uses the mobile single-column
+  // layout" — herdr's own default config, so the boundary belongs to mobile.
+  const mobile = columns <= threshold
 
   const tabPosition = str(values, 'ui.tab_bar_position', 'top')
   const tabBarEdge = `1px solid ${palette.surface0}`
@@ -410,6 +422,7 @@ export function HerdrPreview() {
 
   const delivery = str(values, 'ui.toast.delivery', 'off')
   const toastPosition = str(values, 'ui.toast.herdr.position', 'bottom-right')
+  const toastDelay = num(values, 'ui.toast.delay_seconds', 1)
 
   const panes: readonly SamplePane[] = mobile ? SAMPLE_PANES.slice(0, 1) : SAMPLE_PANES
 
@@ -541,6 +554,10 @@ export function HerdrPreview() {
                     name={`agent ${agent.agent}`}
                     data={{ agent: agent.agent }}
                     className="w-full px-[8px] py-[1px]"
+                    style={{
+                      background:
+                        agent.agent === SAMPLE_FOCUSED_AGENT ? palette.selection_bg : undefined,
+                    }}
                   >
                     <SubjectRows
                       rows={Array.isArray(override) ? override : agentsRows}
@@ -623,7 +640,7 @@ export function HerdrPreview() {
             >
               <span
                 className="absolute left-0 h-[30%] w-full"
-                style={{ top: `${pane.scroll * 60}%`, background: palette.overlay0 }}
+                style={{ top: `${pane.scroll * 60}%`, background: palette.overlay1 }}
               />
             </span>
           ) : null}
@@ -660,6 +677,9 @@ export function HerdrPreview() {
             </span>
           </>
         )}
+        <span data-part="toast-delay" className="block truncate" style={{ color: palette.overlay0 }}>
+          {`after ${toastDelay}s`}
+        </span>
       </Region>
     </div>
   )
@@ -709,8 +729,12 @@ export function HerdrPreview() {
           {`⌗ ${columns} cols`}
         </button>
 
-        <Region id="mobile" name={`mobile below ${threshold} columns`} className="px-[6px] py-[1px]">
-          {mobile ? `mobile · under ${threshold}` : `mobile below ${threshold}`}
+        <Region
+          id="mobile"
+          name={`mobile at or below ${threshold} columns`}
+          className="px-[6px] py-[1px]"
+        >
+          {mobile ? `mobile · ≤ ${threshold}` : `mobile ≤ ${threshold}`}
         </Region>
       </div>
 

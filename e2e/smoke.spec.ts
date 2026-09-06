@@ -181,6 +181,32 @@ test('clicking an agent row in the preview edits the rows that draw it', async (
   await expect(page.getByRole('button', { name: 'ui.sidebar.agents.rows = 2' })).toBeFocused()
 })
 
+/**
+ * The shell is `overflow-hidden`, so a popover that runs off the bottom of the
+ * window is not scrolled back — it is unreachable. The three bottom-anchored
+ * regions are the ones that used to do it.
+ */
+for (const region of [
+  'notification toast, delivery off',
+  'sidebar width, 26 columns',
+  'pane zsh',
+]) {
+  test(`the popover for "${region}" opens fully inside the window`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 820 })
+    await page.goto('/')
+
+    await page.getByRole('region', { name: /^preview/ }).getByRole('button', { name: region }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    const box = await dialog.boundingBox()
+    expect(box, 'the popover must be laid out').not.toBeNull()
+    expect(box!.y).toBeGreaterThanOrEqual(0)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(820)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(1280)
+  })
+}
+
 test('the shell matches the reference at 1280x820', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await page.goto('/')
