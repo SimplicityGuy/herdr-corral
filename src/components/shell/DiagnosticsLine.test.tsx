@@ -42,6 +42,13 @@ describe('DiagnosticsLine', () => {
     expect(screen.getByLabelText('mode')).toHaveTextContent('RECORD')
   })
 
+  it('counts one changed key as one key', () => {
+    useConfigStore.getState().set('ui.sidebar_width', 40)
+    show()
+
+    expect(screen.getByText('1 key changed')).toBeInTheDocument()
+  })
+
   it('counts the changed keys', () => {
     useConfigStore.getState().set('ui.sidebar_width', 40)
     useConfigStore.getState().set('theme.name', 'gruvbox')

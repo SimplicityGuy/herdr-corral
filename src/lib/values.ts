@@ -62,7 +62,12 @@ export function toneOf(key: string, value: TomlValue | undefined): string {
   if (typeof value === 'boolean') return value ? 'text-green' : 'text-red'
   if (typeof value === 'number') return 'text-yellow'
   const declared = typeOf(key)
-  if (declared === 'keybinding') return 'text-yellow'
+  // Chords are yellow, as the mockup draws `prefix ctrl+b` and `split_vertical
+  // prefix+v`. herdr types most of them `keybinding`, but `keys.prefix`,
+  // `keys.remote_image_paste` and the `keys.indexed.*` entries are documented as
+  // plain strings even though every one of them holds a chord or a modifier
+  // combo — the whole `[keys]` table does — so the table decides, not the word.
+  if (declared === 'keybinding' || key.startsWith('keys.')) return 'text-yellow'
   if (declared === 'color') return 'text-teal'
   return 'text-green'
 }

@@ -85,6 +85,18 @@ describe('SettingsTree', () => {
     expect(useConfigStore.getState().selection.key).toBe(first)
   })
 
+  it('answers j on a fresh load, when the focus is still on the body', async () => {
+    const user = userEvent.setup()
+    openSection('sidebar')
+    render(<SettingsTree />)
+
+    expect(document.activeElement).toBe(document.body)
+    await user.keyboard('j')
+
+    expect(useConfigStore.getState().selection.key).toBe('ui.sidebar_min_width')
+    expect(screen.getByRole('button', { name: /^ui\.sidebar_min_width/ })).toHaveFocus()
+  })
+
   it('opens the editor popover for the focused row on enter', async () => {
     const user = userEvent.setup()
     openSection('sidebar')
