@@ -148,3 +148,9 @@ vite.config.ts.timestamp-*
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/

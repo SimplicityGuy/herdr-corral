@@ -1,0 +1,190 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * ADR-0002 "Console" design language.
+ *
+ * The chrome is fixed dark (catppuccin mocha family, coral accent) and never
+ * follows the OS theme; only the herdr *preview* renders light themes, and it
+ * paints its own colors. There is therefore one palette here, not two.
+ *
+ * Naming note: ADR-0002 calls corral's coral `--accent`. shadcn/ui already owns
+ * `--accent` for a component's hover/selected background, so the ADR's accent
+ * lives here as `--coral` / `bg-coral` / `text-coral`, and feeds shadcn's
+ * `--primary` and `--ring`. Everything else keeps the ADR's name verbatim.
+ */
+@theme {
+  /* Chrome palette — ADR-0002 */
+  --color-crust: #11111b;
+  --color-mantle: #181825;
+  --color-base: #1e1e2e;
+  --color-surface0: #313244;
+  --color-surface1: #45475a;
+  --color-overlay0: #6c7086;
+  --color-subtext0: #a6adc8;
+  --color-text: #cdd6f4;
+  --color-coral: #ee6a4f;
+
+  /* Semantic — diagnostics, token chips, agent states */
+  --color-green: #a6e3a1;
+  --color-yellow: #f9e2af;
+  --color-red: #f38ba8;
+  --color-mauve: #cba6f7;
+  --color-blue: #89b4fa;
+  --color-teal: #94e2d5;
+  --color-peach: #fab387;
+
+  /* Type — one family, everywhere */
+  --font-sans: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-mono: var(--font-sans);
+  --font-heading: var(--font-sans);
+
+  /* Shell metrics — ADR-0002 "Shell anatomy" */
+  --spacing-topline: 30px;
+  --spacing-diagnostics: 28px;
+  --spacing-tree: 300px;
+}
+
+@theme inline {
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
+}
+
+/*
+ * shadcn's component variables, restyled to the Console tokens.
+ * `--radius: 0` — square corners everywhere; the radius scale above collapses
+ * every `rounded-*` shadcn emits onto it.
+ */
+:root {
+  --radius: 0px;
+
+  --background: var(--color-crust);
+  --foreground: var(--color-text);
+  --card: var(--color-mantle);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-mantle);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-coral);
+  --primary-foreground: var(--color-crust);
+  --secondary: var(--color-surface0);
+  --secondary-foreground: var(--color-text);
+  --muted: var(--color-surface0);
+  --muted-foreground: var(--color-overlay0);
+  --accent: var(--color-surface0);
+  --accent-foreground: var(--color-text);
+  --destructive: var(--color-red);
+  --destructive-foreground: var(--color-crust);
+  --border: var(--color-surface1);
+  --input: var(--color-surface1);
+  --ring: var(--color-coral);
+
+  --chart-1: var(--color-coral);
+  --chart-2: var(--color-blue);
+  --chart-3: var(--color-green);
+  --chart-4: var(--color-yellow);
+  --chart-5: var(--color-mauve);
+
+  --sidebar: var(--color-mantle);
+  --sidebar-foreground: var(--color-text);
+  --sidebar-primary: var(--color-coral);
+  --sidebar-primary-foreground: var(--color-crust);
+  --sidebar-accent: var(--color-surface0);
+  --sidebar-accent-foreground: var(--color-text);
+  --sidebar-border: var(--color-surface1);
+  --sidebar-ring: var(--color-coral);
+}
+
+/* The chrome is always dark; `.dark` exists only so shadcn's dark: variants
+   resolve to the same palette rather than to a second one. */
+.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* No gradients, no pills, no shadows on panels — ADR-0002. */
+  :focus-visible {
+    @apply outline-1 outline-offset-1;
+    outline-color: var(--color-coral);
+  }
+}
+
+/*
+ * Square corners, no exceptions — ADR-0002.
+ *
+ * Collapsing the `--radius-*` scale onto `--radius: 0` covers `rounded-sm`
+ * through `rounded-4xl`, but three shapes escape it:
+ *   - `rounded-full`, which Tailwind emits as a fixed `calc(infinity * 1px)`,
+ *   - arbitrary values like `rounded-[4px]` and `rounded-[2px]`,
+ *   - `rounded`, whose radius is a fixed `0.25rem` rather than a scale step.
+ * shadcn's vendored components use all three, so they are zeroed here.
+ *
+ * This block is deliberately OUTSIDE `@layer`. Tailwind's utilities live in a
+ * cascade layer, and any rule inside `@layer base` loses to them no matter how
+ * specific it is; unlayered rules outrank every layer. `rounded-[inherit]` is
+ * exempt because it propagates a parent's radius rather than setting one.
+ */
+.rounded-full,
+[class~="rounded"],
+[class*="rounded-["]:not([class*="rounded-[inherit]"]) {
+  border-radius: 0;
+}
