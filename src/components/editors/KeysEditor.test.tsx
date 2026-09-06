@@ -372,7 +372,9 @@ describe('the [4] keys section', () => {
     expect(screen.getByRole('region', { name: /^keybindings/ })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: /^preview/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '[1] layout' }))
+    // Not `[1] layout`: `SectionForm` claims that section's centre frame too,
+    // so `[2] sidebar` is the one still falling through to the preview.
+    await user.click(screen.getByRole('button', { name: '[2] sidebar' }))
     expect(screen.getByRole('region', { name: /^preview/ })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: /^keybindings/ })).not.toBeInTheDocument()
   })

@@ -90,15 +90,23 @@ export function ScalarPopoverEditor({ path, value, diagnostics, commit, cancel }
         // The switch and the toggle-group items ADR-0002 asks for are real
         // `<button>`s (Radix), so their own default action for `enter` is
         // "click", which never reaches the form's `submit` event. Intercept it
-        // before that default fires, so `enter` still means "apply" here, same
-        // as it does in every text-shaped field. `space` is untouched, so it
-        // still toggles the control the ordinary way.
+        // before that default fires, so `enter` still means "apply" for those
+        // two controls specifically, same as it does in every text-shaped
+        // field. `space` is untouched, so it still toggles the ordinary way.
+        //
+        // Read by ARIA role (`switch`, and `radio` for a toggle-group item)
+        // rather than a data attribute this file would have to add to
+        // `Field.tsx`'s shared controls — Radix already sets both roles for
+        // its own reasons, and no other button here carries either one, so a
+        // button with its own meaning for `enter` — the chip list's remove
+        // button, the cancel button, the stepper — keeps it. Removing a chip
+        // via `enter` and applying the popover via `enter` are different
+        // actions on different buttons, not the same button doing two things.
         if (event.key !== 'Enter') return
         const target = event.target
-        if (!(target instanceof HTMLElement) || target.tagName !== 'BUTTON') return
-        // The cancel button is a button too, and `enter` on it must still mean
-        // cancel — let its own click handler answer that instead.
-        if (target.dataset.popoverRole === 'cancel') return
+        if (!(target instanceof HTMLElement)) return
+        const role = target.getAttribute('role')
+        if (role !== 'switch' && role !== 'radio') return
         event.preventDefault()
         apply()
       }}
@@ -112,7 +120,7 @@ export function ScalarPopoverEditor({ path, value, diagnostics, commit, cancel }
       {/* `esc` already cancels (`InlinePopover`'s document listener); this is
           the same action reachable by tab, for the same reason `Apply` is a
           real button rather than only a hint. */}
-      <button type="button" data-popover-role="cancel" onClick={cancel} className="sr-only">
+      <button type="button" onClick={cancel} className="sr-only">
         {`cancel ${path}`}
       </button>
     </form>

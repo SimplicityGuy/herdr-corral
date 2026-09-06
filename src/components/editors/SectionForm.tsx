@@ -93,7 +93,15 @@ function AgentSoundGrid({ keys }: { keys: readonly string[] }) {
   return (
     <div>
       <h3 className="mb-[6px] text-overlay0">per-agent overrides</h3>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-[6px]">
+      {/* Name over control, not side by side: `github_copilot` is 14 characters
+          and a fixed side-by-side basis would still clip it, where stacking
+          leaves the full cell width to the name. A long name still ellipsises
+          rather than fitting whole — acceptable, with the tooltip, at a floor
+          this narrow — but the control cannot: the three-item toggle group has
+          an intrinsic width of 177px and never shrinks, so the floor has to fit
+          it (177px plus 8px padding on each side) or its last option renders
+          outside the cell, unreachable by mouse or by hit test alike. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-[6px]">
         {keys.map((key) => (
           <AgentSoundRow key={key} path={key} />
         ))}
@@ -109,8 +117,8 @@ function AgentSoundRow({ path }: { path: string }) {
   const label = path.slice(AGENT_SOUND_PREFIX.length)
 
   return (
-    <div className="flex items-center justify-between gap-2 border border-surface1 bg-base px-2 py-[4px]">
-      <span className="min-w-0 flex-1 truncate text-subtext0" title={path}>
+    <div className="flex flex-col gap-[4px] border border-surface1 bg-base px-2 py-[6px]">
+      <span className="truncate text-subtext0" title={path}>
         {label}
         {changed && (
           <span aria-label="changed" className="ml-[4px] text-coral">

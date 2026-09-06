@@ -34,7 +34,8 @@ import { diagnosticsAt, useDiagnostics } from '@/lib/diagnostics'
 import { resetKey, setKey } from '@/lib/edit'
 import { parseDraft } from '@/lib/values'
 import type { TomlValue } from '@/model/parse'
-import { byKey, enumOptions, typeOf } from '@/schema'
+import { integerBoundOf } from '@/model/validate'
+import { byKey, enumOptions, themeNames, typeOf } from '@/schema'
 import { useConfigStore } from '@/store/config'
 import { useState } from 'react'
 
@@ -44,7 +45,15 @@ const TEXT_INPUT =
 
 const STEP_BUTTON = 'border border-surface1 bg-surface0 px-[6px] text-text hover:border-coral'
 
-/** A numeric ceiling this key's own description documents, or none. */
+/**
+ * A numeric ceiling this key's own description documents, in prose.
+ *
+ * Fallback only: `integerBoundOf` (`model/validate.ts`) is the real source —
+ * the same table `checkInteger` enforces against — and covers every key
+ * herdr actually bounds. This exists for a key that documents a range in
+ * words without validate.ts having a matching entry, which is not true of
+ * any key today but is cheaper to keep than to re-derive later.
+ */
 function documentedMax(description: string): number | undefined {
   const through = /\b\d+\s+through\s+(\d+)\b/i.exec(description)
   if (through) return Number.parseInt(through[1], 10)
@@ -90,7 +99,8 @@ function IntegerControl({
   }
 
   const entry = byKey(path)
-  const max = entry === undefined ? undefined : documentedMax(entry.description)
+  const max =
+    integerBoundOf(path) ?? (entry === undefined ? undefined : documentedMax(entry.description))
 
   function apply(text: string) {
     setDraft(text)
@@ -257,6 +267,14 @@ function StringListControl({
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
+            // A draft with nothing in it has nothing for this `enter` to add,
+            // so it is left unhandled: the popover has a real `<form>` and a
+            // submit button, and its own implicit-submission default is what
+            // makes a second, empty-draft `enter` apply and close — the same
+            // "enter" the every other field already answers to. Inline in
+            // `SectionForm` there is no enclosing form, so the same default is
+            // simply a no-op there.
+            if (draft.trim() === '') return
             event.preventDefault()
             commitDraft()
           } else if (event.key === 'Backspace' && draft === '' && value.length > 0) {
@@ -266,6 +284,44 @@ function StringListControl({
         className={TEXT_INPUT}
       />
     </div>
+  )
+}
+
+/**
+ * `theme.name`, `theme.dark_name`, and `theme.light_name` — schema type
+ * `string`, so free text is technically correct, but herdr's built-in themes
+ * are a known, short list and a select is cheap and strictly better while
+ * these three still sit with `Field` (see `lib/scalar-fields.ts`). A value
+ * that is not one of `themeNames()` — an alias `canonicalThemeName` accepts,
+ * or a name the schema does not know — still gets its own option, the same
+ * way the generic enum control keeps an out-of-list value selectable.
+ */
+const THEME_NAME_KEYS: ReadonlySet<string> = new Set(['theme.name', 'theme.dark_name', 'theme.light_name'])
+
+function ThemeNameControl({
+  path,
+  value,
+  onChange,
+}: {
+  path: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  const names = themeNames()
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger aria-label={path} className="w-full bg-base">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {value !== '' && !names.includes(value) && <SelectItem value={value}>{value}</SelectItem>}
+        {names.map((name) => (
+          <SelectItem key={name} value={name}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -323,6 +379,9 @@ export function ScalarControl({
         onChange={onChange as (value: string[]) => void}
       />
     )
+  }
+  if (THEME_NAME_KEYS.has(path)) {
+    return <ThemeNameControl path={path} value={typeof value === 'string' ? value : ''} onChange={onChange} />
   }
   // 'string', 'path', and anything the schema has not declared yet.
   return <StringControl path={path} declared={declared} value={typeof value === 'string' ? value : ''} onChange={onChange} />

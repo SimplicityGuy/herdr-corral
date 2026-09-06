@@ -9,6 +9,14 @@
  * spelling at all. `ownedElsewhere` is the one predicate `SectionForm`,
  * `register-scalar-editors.tsx`, and the coverage test all read the split
  * from, so it lives here rather than being decided three different ways.
+ *
+ * `theme.name`, `theme.dark_name`, `theme.light_name`, `theme.auto_switch`,
+ * and `ui.accent` are NOT in that list — they are ordinary scalars (three
+ * strings, a boolean, a color) and `Field` renders all five today, the three
+ * names through `ThemeNameControl`'s `themeNames()` select rather than free
+ * text. They stay Field's only until the theme editor bead lands and claims
+ * them for its own palette UI; moving them then is that bead's `ownedElsewhere`
+ * entry to add, not a gap to fill now.
  */
 import { typeOf } from '@/schema'
 

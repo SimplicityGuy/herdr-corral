@@ -1,5 +1,6 @@
 import { Field } from '@/components/common/Field'
 import { ownedElsewhere } from '@/lib/scalar-fields'
+import { integerBoundOf } from '@/model/validate'
 import { allEntries } from '@/schema'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { render, screen } from '@testing-library/react'
@@ -54,7 +55,7 @@ describe('Field', () => {
     expect(screen.getByLabelText('changed')).toBeInTheDocument()
   })
 
-  it('writes an integer once it parses, and clamps the stepper at zero', async () => {
+  it('writes an integer once it parses, and keeps the last value a keystroke does not', async () => {
     const user = userEvent.setup()
     render(<Field path="ui.sidebar_width" />)
 
@@ -65,19 +66,48 @@ describe('Field', () => {
 
     await user.click(screen.getByLabelText('ui.sidebar_width decrease'))
     expect(useConfigStore.getState().explicit().get('ui.sidebar_width')).toBe(41)
+
+    // The trailing `x` never parses, so the store keeps the last value that did.
+    await user.type(input, 'x')
+    expect(useConfigStore.getState().explicit().get('ui.sidebar_width')).toBe(41)
   })
 
-  it('shows a documented range and holds an out-of-range integer at 0', async () => {
-    const user = userEvent.setup()
+  it("shows the validator's own range, from validate.ts rather than prose", () => {
     render(<Field path="ui.toast.delay_seconds" />)
 
     expect(screen.getByText('0–3600')).toBeInTheDocument()
+  })
+
+  it('clamps the stepper at the documented lower and upper bounds', async () => {
+    const user = userEvent.setup()
+    render(<Field path="ui.toast.delay_seconds" />)
+
+    // Starts at the default, 1: one decrease reaches the floor, and a second
+    // does not go negative.
+    await user.click(screen.getByLabelText('ui.toast.delay_seconds decrease'))
+    expect(useConfigStore.getState().explicit().get('ui.toast.delay_seconds')).toBe(0)
+    await user.click(screen.getByLabelText('ui.toast.delay_seconds decrease'))
+    expect(useConfigStore.getState().explicit().get('ui.toast.delay_seconds')).toBe(0)
 
     const input = screen.getByLabelText('ui.toast.delay_seconds')
     await user.clear(input)
-    // The trailing `x` never parses, so the store keeps the last value that did.
-    await user.type(input, '12x')
-    expect(useConfigStore.getState().explicit().get('ui.toast.delay_seconds')).toBe(12)
+    await user.type(input, '3600')
+    await user.click(screen.getByLabelText('ui.toast.delay_seconds increase'))
+    expect(useConfigStore.getState().explicit().get('ui.toast.delay_seconds')).toBe(3600)
+  })
+
+  it("shows every integer key's range as validate.ts's own bound, not the prose fallback", () => {
+    const integerKeys = allEntries()
+      .filter((entry) => entry.type === 'integer')
+      .map((entry) => entry.key)
+    expect(integerKeys.length).toBe(11)
+
+    for (const key of integerKeys) {
+      const { unmount } = render(<Field path={key} />)
+      const bound = integerBoundOf(key)
+      expect(screen.getByText(bound === undefined ? '0–' : `0–${bound}`)).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('writes an enum through a toggle group when there are three options or fewer', async () => {
@@ -97,6 +127,22 @@ describe('Field', () => {
     await user.click(await screen.findByRole('option', { name: 'system' }))
 
     expect(useConfigStore.getState().explicit().get('ui.toast.delivery')).toBe('system')
+  })
+
+  it("offers theme.name as a themeNames() select rather than free text, and keeps an unlisted value", async () => {
+    const user = userEvent.setup()
+    render(<Field path="theme.name" />)
+
+    await user.click(screen.getByRole('combobox', { name: 'theme.name' }))
+    await user.click(await screen.findByRole('option', { name: 'gruvbox' }))
+    expect(useConfigStore.getState().explicit().get('theme.name')).toBe('gruvbox')
+  })
+
+  it("keeps an out-of-list theme.name value selectable, the way the generic enum control does", () => {
+    useConfigStore.getState().set('theme.name', 'not-a-real-theme')
+    render(<Field path="theme.name" />)
+
+    expect(screen.getByRole('combobox', { name: 'theme.name' })).toHaveTextContent('not-a-real-theme')
   })
 
   it('writes a string as typed', async () => {

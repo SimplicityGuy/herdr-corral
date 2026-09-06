@@ -18,13 +18,15 @@
  * except `theme.custom.*`, which the theme editor claims for itself and reuses
  * this component to do it.
  */
-import { isColor } from '@/model/validate'
+import { isColor, isResetColor } from '@/model/validate'
 import { useId } from 'react'
 
 /**
  * herdr's named colors (src/config/theme.rs:168-189), plus `reset` — the
  * spelling `parse_color` maps to the terminal's own foreground/background
  * (src/config/theme.rs:130-133) and the one every color setting accepts.
+ * Whether a typed value is one of the four reset spellings is `isResetColor`'s
+ * question (`model/validate.ts`), not repeated here as a second list.
  */
 const COLOR_NAMES: readonly string[] = [
   'reset',
@@ -66,18 +68,32 @@ export function ColorField(props: ColorFieldProps) {
   const label = props['aria-label']
   const value = props.value ?? ''
   const trimmed = value.trim()
-  const swatch = trimmed !== '' && isColor(trimmed) ? trimmed : null
-  const invalid = trimmed !== '' && !isColor(trimmed)
+  const isReset = isResetColor(trimmed)
+  // `backgroundColor: 'reset'` is not a CSS color — it fails silently and the
+  // swatch is left showing whatever it last painted — so a reset spelling gets
+  // its own indicator rather than being handed to `style` at all.
+  const swatch = trimmed !== '' && !isReset && isColor(trimmed) ? trimmed : null
+  const invalid = trimmed !== '' && !isReset && !isColor(trimmed)
 
   return (
     <div className="flex flex-col gap-[4px]">
       <div className="flex items-center gap-2">
-        <span
-          aria-hidden="true"
-          title={swatch ?? undefined}
-          className="size-[18px] shrink-0 border border-surface1 bg-base"
-          style={swatch !== null ? { backgroundColor: swatch } : undefined}
-        />
+        {isReset ? (
+          <span
+            aria-hidden="true"
+            title="terminal default"
+            className="flex size-[18px] shrink-0 items-center justify-center border border-dashed border-surface1 bg-base text-[9px] leading-none text-overlay0"
+          >
+            {'∅'}
+          </span>
+        ) : (
+          <span
+            aria-hidden="true"
+            title={swatch ?? undefined}
+            className="size-[18px] shrink-0 border border-surface1 bg-base"
+            style={swatch !== null ? { backgroundColor: swatch } : undefined}
+          />
+        )}
         <input
           id={inputId}
           aria-label={label}
@@ -103,11 +119,13 @@ export function ColorField(props: ColorFieldProps) {
           ))}
         </select>
       </div>
-      {/* Mirrors `checkColor`'s own wording (model/validate.ts), so a garbage
-          value reads the same warning here as it would in the diagnostics line. */}
+      {/* Mirrors `checkColor`'s own wording (model/validate.ts) exactly, down to
+          showing the value as typed rather than trimmed — `show()` there does
+          the same — so a garbage value reads the same warning here as it
+          would in the diagnostics line. */}
       {invalid && (
         <p className="text-yellow">
-          {'▲ '}unknown color {JSON.stringify(trimmed)}; herdr will fall back to cyan
+          {'▲ '}unknown color {JSON.stringify(value)}; herdr will fall back to cyan
         </p>
       )}
     </div>

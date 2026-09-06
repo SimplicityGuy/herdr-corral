@@ -51,4 +51,33 @@ describe('ColorField', () => {
 
     expect(onChange).toHaveBeenLastCalledWith('reset')
   })
+
+  it.each([['reset'], ['default'], ['none'], ['transparent']])(
+    'shows a terminal-default indicator for %s, not an invalid swatch',
+    (spelling) => {
+      render(<ColorField aria-label="color" value={spelling} onChange={() => {}} />)
+
+      const indicator = screen.getByTitle('terminal default')
+      expect(indicator).toBeInTheDocument()
+      // `backgroundColor: 'reset'` is not a color the browser can paint —
+      // the indicator must not be handed one at all.
+      expect(indicator.style.backgroundColor).toBe('')
+      expect(screen.queryByText(/unknown color/)).not.toBeInTheDocument()
+    },
+  )
+
+  it('warns with the value exactly as typed, not trimmed — the way checkColor shows it', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.type(screen.getByLabelText('color'), '  notacolor  ')
+
+    // `getByText`'s default matcher collapses whitespace, which would hide
+    // exactly the bug this test is for — read the raw text instead.
+    expect(
+      screen.getByText('▲ unknown color "  notacolor  "; herdr will fall back to cyan', {
+        normalizer: (text) => text,
+      }),
+    ).toBeInTheDocument()
+  })
 })

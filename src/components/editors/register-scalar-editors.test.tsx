@@ -102,4 +102,43 @@ describe('register-scalar-editors', () => {
     expect(useConfigStore.getState().effective('ui.sidebar_width')).toBe(34)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
+  it('for a list of strings: enter adds a chip, then a second enter applies and closes', async () => {
+    const user = userEvent.setup()
+    open('experimental.cjk_ime_agents')
+    render(<InlinePopover />)
+
+    const input = screen.getByRole('textbox', { name: 'experimental.cjk_ime_agents' })
+    await user.click(input)
+    await user.keyboard('claude{Enter}')
+
+    // The chip is added to the draft; nothing is committed and the popover
+    // is still open — a bare `enter` on an empty input is what applies.
+    expect(screen.getByText('claude')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(useConfigStore.getState().isDirty()).toBe(false)
+
+    await user.keyboard('{Enter}')
+
+    expect(useConfigStore.getState().effective('experimental.cjk_ime_agents')).toEqual(['claude'])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it("enter on a chip's remove button removes it, rather than applying the popover", async () => {
+    const user = userEvent.setup()
+    open('experimental.cjk_ime_agents')
+    render(<InlinePopover />)
+
+    const input = screen.getByRole('textbox', { name: 'experimental.cjk_ime_agents' })
+    await user.click(input)
+    await user.keyboard('claude{Enter}')
+    expect(screen.getByText('claude')).toBeInTheDocument()
+
+    screen.getByRole('button', { name: 'remove claude' }).focus()
+    await user.keyboard('{Enter}')
+
+    expect(screen.queryByText('claude')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(useConfigStore.getState().isDirty()).toBe(false)
+  })
 })

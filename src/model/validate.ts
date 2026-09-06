@@ -177,6 +177,16 @@ export function isHexColor(text: string): boolean {
 }
 
 /**
+ * True when `text` is one of the four spellings that resolve to the terminal's
+ * own foreground/background rather than an actual color — not a color
+ * `ColorField`'s swatch can paint, so it is exported for that check as well as
+ * used here, rather than kept as a second, private copy of the same list.
+ */
+export function isResetColor(text: string): boolean {
+  return RESET_COLORS.includes(text.trim().toLowerCase())
+}
+
+/**
  * True when `parse_color` would resolve `text` to something other than its cyan
  * fallback (src/config/theme.rs:126-190). Case and surrounding space are
  * ignored, because herdr trims and lowercases first.
@@ -289,6 +299,19 @@ const INTEGER_BOUNDS: ReadonlyMap<string, number> = new Map([
   ['ui.sidebar.spaces.row_gap', U16_MAX],
   ['ui.toast.delay_seconds', MAX_TOAST_DELAY_SECONDS],
 ])
+
+/**
+ * The upper bound `checkInteger` enforces for this key, or `undefined` when
+ * herdr documents none (`ui.mouse_scroll_lines`, `advanced.scrollback_limit_bytes`
+ * — still a non-negative integer, just not a bounded one).
+ *
+ * The one export this table needs: `Field`'s integer control reads it so the
+ * range it shows and the stepper's ceiling agree with what `validate()` would
+ * actually flag, rather than a second copy of the same numbers.
+ */
+export function integerBoundOf(path: string): number | undefined {
+  return INTEGER_BOUNDS.get(path)
+}
 
 /** Navigate-mode movement, which plays by its own rules (see `keys.ts`). */
 const NAVIGATE_KEYS: readonly string[] = [

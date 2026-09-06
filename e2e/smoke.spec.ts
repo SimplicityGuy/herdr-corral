@@ -19,7 +19,7 @@ test('the shell has the anatomy ADR-0002 draws', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
   // The shell opens on `layout`, which SectionForm claims as a typed form
   // rather than the herdr preview — see the forms spec for that center frame.
-  // `sidebar` is still the preview placeholder, pending that bead.
+  // `sidebar` still shows the real mock; the switch is only what changed.
   await page.keyboard.press('2')
   await expect(page.getByRole('region', { name: /^preview/ })).toBeVisible()
   await expect(page.getByLabel('mode', { exact: true })).toHaveText('EDIT')
@@ -167,6 +167,10 @@ for (const width of [960, 1020, 1280]) {
 test('clicking an agent row in the preview edits the rows that draw it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
+  // The shell opens on layout, where SectionForm claims the center frame;
+  // the mock itself is not section-filtered, so any other section shows the
+  // whole thing, agent row and pane border alike.
+  await page.keyboard.press('2')
 
   const preview = page.getByRole('region', { name: /^preview/ })
   const row = preview.getByRole('button', { name: 'agent claude' })
@@ -203,6 +207,9 @@ for (const region of [
   test(`the popover for "${region}" opens fully inside the window`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 820 })
     await openConsole(page)
+    // Layout, the default section, is SectionForm's center frame now; the
+    // mock itself is not section-filtered, so any other section shows it.
+    await page.keyboard.press('2')
 
     await page.getByRole('region', { name: /^preview/ }).getByRole('button', { name: region }).click()
 
@@ -220,6 +227,9 @@ test('the shell matches the reference at 1280x820', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
+  // Layout, the default section, is SectionForm's center frame now; switch to
+  // one the preview and keys beads still own to see the mock itself.
+  await page.keyboard.press('2')
 
   // The mock's anatomy, as console-direction.html draws it: a tab row with its
   // right-hand entries, the Spaces and Agents panels, two panes with `┤ ├`
