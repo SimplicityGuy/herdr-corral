@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>corral — Console direction (design reference)</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'JetBrains Mono', Menlo, Consolas, monospace; }
+    a { color: #fab387; } a:hover { color: #f9e2af; }
+  </style>
+
+</head>
+<body>
+<div style="width: 1280px; height: 820px; background: #11111b; color: #cdd6f4; display: flex; flex-direction: column; overflow: hidden; font-size: 13px; line-height: 1.45;">
+
+  <!-- top line -->
+  <div style="height: 30px; background: #181825; display: flex; align-items: center; padding: 0 14px; gap: 18px; border-bottom: 1px solid #313244;">
+    <span style="color: #ee6a4f; font-weight: 700;">▐▛█▜▌</span>
+    <span style="color: #a6adc8;">config.toml</span>
+    <span style="color: #6c7086;">[1] layout</span>
+    <span style="color: #cdd6f4; background: #313244; padding: 2px 8px;">[2] sidebar</span>
+    <span style="color: #6c7086;">[3] status</span>
+    <span style="color: #6c7086;">[4] keys</span>
+    <span style="color: #6c7086;">[5] theme</span>
+    <span style="color: #6c7086;">[6] all</span>
+    <span style="margin-left: auto; color: #6c7086;">ctrl+b ?  help   ctrl+k  palette</span>
+  </div>
+
+  <!-- body -->
+  <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); flex-grow: 1; min-height: 0; padding: 10px; gap: 10px;">
+
+    <!-- settings tree -->
+    <div style="border: 1px solid #45475a; position: relative; padding: 14px 12px; display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
+      <div style="position: absolute; top: -9px; left: 10px; background: #11111b; padding: 0 6px; color: #a6adc8;">┤ settings ├</div>
+      <div style="color: #6c7086;">  ui</div>
+      <div style="color: #a6adc8;">  ├ sidebar_width           <span style="color: #f9e2af;">26</span></div>
+      <div style="color: #a6adc8;">  ├ sidebar_collapsed_mode  <span style="color: #a6e3a1;">compact</span></div>
+      <div style="color: #a6adc8;">  ├ tab_bar_position        <span style="color: #a6e3a1;">top</span></div>
+      <div style="color: #a6adc8;">  ├ sidebar.spaces.rows     <span style="color: #6c7086;">2</span></div>
+      <div style="color: #cdd6f4; background: #313244; margin: 0 -12px; padding: 0 12px;"><span style="color: #ee6a4f;">▸</span> ├ sidebar.agents.rows     <span style="color: #6c7086;">2</span></div>
+      <div style="color: #a6adc8;">  ├ tab_bar_right           <span style="color: #6c7086;">3</span></div>
+      <div style="color: #a6adc8;">  └ accent                  <span style="color: #94e2d5;">cyan</span></div>
+      <div style="color: #6c7086; margin-top: 6px;">  theme</div>
+      <div style="color: #a6adc8;">  ├ name                    <span style="color: #a6e3a1;">catppuccin</span></div>
+      <div style="color: #a6adc8;">  └ auto_switch             <span style="color: #f38ba8;">false</span></div>
+      <div style="color: #6c7086; margin-top: 6px;">  keys</div>
+      <div style="color: #a6adc8;">  ├ prefix                  <span style="color: #f9e2af;">ctrl+b</span></div>
+      <div style="color: #a6adc8;">  ├ split_vertical          <span style="color: #f9e2af;">prefix+v</span></div>
+      <div style="color: #a6adc8;">  └ 164 more…</div>
+      <div style="color: #6c7086; margin-top: 6px;">  terminal</div>
+      <div style="color: #6c7086;">  update</div>
+      <div style="color: #6c7086;">  experimental</div>
+      <div style="margin-top: auto; color: #6c7086; border-top: 1px solid #313244; padding-top: 10px;">/ search   j k move   enter edit<br>d reset to default   u undo</div>
+    </div>
+
+    <!-- preview is the editor -->
+    <div style="border: 1px solid #45475a; position: relative; display: flex; flex-direction: column; overflow: hidden;">
+      <div style="position: absolute; top: -9px; left: 10px; background: #11111b; padding: 0 6px; color: #a6adc8; z-index: 1;">┤ preview · click anything to edit it ├</div>
+      <div style="flex-grow: 1; background: #1e1e2e; display: flex; flex-direction: column; font-size: 12px; margin: 10px;">
+        <div style="height: 26px; background: #181825; display: flex; align-items: center; padding: 0 10px; gap: 14px; border-bottom: 1px solid #313244;">
+          <span style="border-bottom: 2px solid #94e2d5; padding: 4px 0;">1:phaze</span><span style="color: #6c7086;">2:homelab</span><span style="color: #6c7086;">3:gruvax</span>
+          <span style="margin-left: auto; color: #a6adc8; display: flex; gap: 14px; outline: 1px dashed #45475a; outline-offset: 3px;"><span>100%</span><span>mbp</span><span>22:41</span></span>
+        </div>
+        <div style="display: flex; flex-grow: 1; min-height: 0;">
+          <div style="width: 210px; background: #181825; border-right: 1px solid #313244; padding: 8px 0; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 3px;"><div style="padding: 0 10px; color: #6c7086; font-size: 10px; letter-spacing: 0.08em;">SPACES</div><div style="padding: 3px 10px; background: #313244;">▸ phaze <span style="color: #6c7086;">3</span></div><div style="padding: 3px 10px; color: #a6adc8;">  homelab <span style="color: #6c7086;">1</span></div><div style="padding: 3px 10px; color: #a6adc8;">  gruvax <span style="color: #6c7086;">2</span></div></div>
+            <div style="display: flex; flex-direction: column; gap: 3px;"><div style="padding: 0 10px; color: #6c7086; font-size: 10px; letter-spacing: 0.08em;">AGENTS</div>
+              <div style="padding: 3px 10px; outline: 1px solid #ee6a4f; outline-offset: -1px; background: #1e1e2e;"><span style="color: #a6e3a1;">●</span> claude <span style="color: #cba6f7;">main</span><br><span style="color: #6c7086;">  working · 12m</span></div>
+              <div style="padding: 3px 10px;"><span style="color: #f9e2af;">◐</span> codex <span style="color: #cba6f7;">feat/api</span><br><span style="color: #6c7086;">  waiting · 3m</span></div>
+              <div style="padding: 3px 10px;"><span style="color: #6c7086;">○</span> gemini <span style="color: #cba6f7;">docs</span><br><span style="color: #6c7086;">  idle</span></div>
+            </div>
+          </div>
+          <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; position: relative;">
+            <div style="border: 1px solid #45475a; padding: 6px 8px; overflow: hidden;"><div style="color: #6c7086; margin-bottom: 4px;">┤ claude · phaze ├</div><div><span style="color: #a6e3a1;">✓</span> Read src/api/routes.py</div><div><span style="color: #a6e3a1;">✓</span> Edit src/api/routes.py</div><div><span style="color: #f9e2af;">●</span> Running pytest -q tests/api</div><div style="color: #6c7086;">  ......................... 25 passed</div><div>Now wiring the new route into the router…</div><div style="color: #6c7086;">▌</div></div>
+            <div style="border: 1px solid #45475a; padding: 6px 8px; overflow: hidden;"><div style="color: #6c7086; margin-bottom: 4px;">┤ zsh ├</div><div><span style="color: #89b4fa;">~/phaze</span> <span style="color: #ee6a4f;">❯</span> git status -sb</div><div style="color: #a6adc8;">## main...origin/main</div><div style="color: #a6adc8;"> M src/api/routes.py</div><div><span style="color: #89b4fa;">~/phaze</span> <span style="color: #ee6a4f;">❯</span> ▌</div></div>
+
+            <!-- inline edit popover anchored to the selected agent row -->
+            <div style="position: absolute; left: 14px; top: 96px; width: 360px; background: #181825; border: 1px solid #ee6a4f; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+              <div style="color: #ee6a4f;">┤ agents.rows[0] ├</div>
+              <div style="display: flex; gap: 6px; align-items: center;"><span style="color: #6c7086;">tokens</span><span style="background: #313244; padding: 1px 6px; color: #a6e3a1;">$status</span><span style="background: #313244; padding: 1px 6px;">$name</span><span style="background: #313244; padding: 1px 6px; color: #cba6f7;">$branch</span><span style="color: #6c7086;">+ drag or type</span></div>
+              <div style="display: flex; gap: 14px;"><span><span style="color: #a6e3a1;">[x]</span> bold</span><span><span style="color: #6c7086;">[ ]</span> dim</span><span>fg: <span style="color: #a6e3a1;">green</span> <span style="color: #6c7086;">▾</span></span></div>
+              <div style="color: #6c7086;">enter apply   esc cancel   tab next token</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- diagnostics line -->
+  <div style="height: 28px; display: flex; align-items: center; font-size: 12px; background: #181825; border-top: 1px solid #313244;">
+    <div style="background: #ee6a4f; color: #11111b; padding: 0 12px; height: 28px; display: flex; align-items: center; font-weight: 700;">EDIT</div>
+    <div style="padding: 0 12px; color: #a6e3a1;">● 0 errors</div>
+    <div style="padding: 0 12px; color: #f9e2af;">▲ 1 warning  ui.sidebar_min_width &gt; sidebar_width</div>
+    <div style="margin-left: auto; padding: 0 12px; color: #a6adc8;">3 keys changed</div>
+    <div style="padding: 0 12px; color: #a6adc8;">:diff</div>
+    <div style="background: #313244; color: #cdd6f4; padding: 0 12px; height: 28px; display: flex; align-items: center;">:w  download config.toml</div>
+  </div>
+</div>
+</body>
+</html>
