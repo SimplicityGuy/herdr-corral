@@ -66,6 +66,8 @@ pnpm install          # pnpm install --frozen-lockfile in CI
 pnpm dev              # Vite dev server on :5173
 pnpm check            # typecheck && lint && test && build — the gate; run before handoff
 pnpm test:e2e         # Playwright against the built app on :4173 (separate from check)
+
+PLAYWRIGHT_PORT=4180 pnpm test:e2e   # ... on a port of this worktree's own
 ```
 
 | Script | What it does |
@@ -83,6 +85,24 @@ pnpm test:e2e         # Playwright against the built app on :4173 (separate from
 
 `check` deliberately excludes e2e so the inner loop stays fast. CI runs both. Unit tests come
 from `src/**` and `scripts/**`, so the schema generator is covered by the same gate as the app.
+
+### Running e2e in a worktree, alongside others
+
+`pnpm test:e2e` builds `dist/` and serves it on **4173**, and that port is one shared resource
+on the machine. Two worktrees running the suite at once collide, and the loser does something
+worse than fail: `reuseExistingServer` attaches it to the *other* worktree's server, and it
+reports green against a bundle it never built. Give each worktree a port of its own:
+
+```bash
+PLAYWRIGHT_PORT=4180 pnpm test:e2e
+lsof -nP -iTCP:4173 -sTCP:LISTEN     # ... or check first whether the default is free
+```
+
+`PLAYWRIGHT_PORT` sets the preview port and `baseURL` together, and setting it *also* turns
+`reuseExistingServer` off — an explicit port is a request for this checkout's `dist/`, which a
+server someone else started is not. `--strictPort` makes a taken port an error rather than a
+silent hop to the next one, and CI never reuses a server at all. The workflow leaves the
+variable unset and runs on 4173, unchanged.
 
 ### Refreshing the generated schema
 
