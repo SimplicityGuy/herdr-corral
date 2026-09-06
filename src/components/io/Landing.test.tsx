@@ -2,7 +2,7 @@ import { Landing, MAX_BYTES } from '@/components/io/Landing'
 import fixture from '@/test/fixture-user-config.toml?raw'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -111,6 +111,38 @@ describe('Landing', () => {
     expect(alertText()).toMatch(/line 2, column \d+/)
     expect(useShellStore.getState().landing).toBe(true)
     expect(useConfigStore.getState().source).toBe('defaults')
+  })
+
+  it('shows the caret excerpt once, not once in the sentence and once below', async () => {
+    render(<Landing />)
+
+    drop(configFile('[theme]\nname = "catppuccin\n'))
+
+    const alert = await screen.findByRole('alert')
+    // smol-toml's `message` is the summary, a blank line, then the same excerpt
+    // the `<pre>` renders; taking it whole printed the caret twice.
+    const carets = (alert.textContent ?? '').match(/\^/g) ?? []
+    expect(carets).toHaveLength(1)
+    expect(alert).toHaveTextContent('control characters are not allowed in strings')
+    expect(within(alert).getByText(/\^/).tagName).toBe('PRE')
+  })
+
+  it('opens an extensionless file the browser gives no type at all', async () => {
+    render(<Landing />)
+
+    drop(new File(['name = "nord"'], 'herdrrc', { type: '' }))
+
+    await screen.findByRole('button', { name: /drop your config\.toml here/ })
+    expect(useShellStore.getState().landing).toBe(false)
+  })
+
+  it('leaves a typeless file that is not TOML to the parser, which says where', async () => {
+    render(<Landing />)
+
+    drop(new File(['not = = toml'], 'notes', { type: '' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('not valid TOML')
+    expect(useShellStore.getState().landing).toBe(true)
   })
 
   it('loads a config pasted into the box', async () => {

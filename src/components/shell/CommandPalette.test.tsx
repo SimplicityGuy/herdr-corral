@@ -105,6 +105,23 @@ describe('CommandPalette', () => {
     expect(useShellStore.getState().paletteOpen).toBe(false)
   })
 
+  it('reaches the diff from the palette, and does so while an error stands', async () => {
+    const user = userEvent.setup()
+    // With an error the write door is shut at both ends, so this is the only way
+    // in to the dialog that names what is wrong.
+    useConfigStore.getState().set('ui.sidebar_width', 'wide')
+    render(<CommandPalette />)
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), ':diff')
+    const item = await screen.findByRole('option', { name: /:diff/ })
+    expect(item).not.toHaveAttribute('data-disabled', 'true')
+
+    await user.click(item)
+
+    expect(useShellStore.getState().exportTab).toBe('diff')
+  })
+
   it('shows each setting with what it currently reads', async () => {
     const user = userEvent.setup()
     render(<CommandPalette />)

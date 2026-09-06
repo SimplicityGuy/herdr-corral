@@ -3,9 +3,27 @@ import { BLOCKED_REASON, CONFIG_PATH } from '@/lib/download'
 import fixture from '@/test/fixture-user-config.toml?raw'
 import { resetConfigStore, useConfigStore } from '@/store/config'
 import { resetShellStore, useShellStore } from '@/store/shell'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+/**
+ * The diff walks the whole file, so the dialog must not run it while it is shut.
+ * Counting the calls is the only way to see an optimisation that is invisible on
+ * screen — and the test beside it checks the thing such a guard usually breaks,
+ * which is showing a stale file after edits made while nobody was looking.
+ */
+const { hunkCalls } = vi.hoisted(() => ({ hunkCalls: { count: 0 } }))
+vi.mock('@/lib/diff', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/diff')>()
+  return {
+    ...actual,
+    unifiedHunks: (...args: Parameters<typeof actual.unifiedHunks>) => {
+      hunkCalls.count += 1
+      return actual.unifiedHunks(...args)
+    },
+  }
+})
 
 beforeEach(() => {
   resetConfigStore()
@@ -13,6 +31,7 @@ beforeEach(() => {
   // The dialog only exists behind the shell, so these tests start past the
   // landing — otherwise "start over" would look like it sent the user back to it.
   useShellStore.getState().setLanding(false)
+  hunkCalls.count = 0
 })
 
 /** Load the fixture, the way the landing hands a file over. */
@@ -225,6 +244,49 @@ describe('ExportDialog', () => {
     expect(useShellStore.getState().landing).toBe(true)
     expect(useShellStore.getState().exportTab).toBeNull()
     expect(useConfigStore.getState().originalText).toBe('')
+  })
+
+  it('diffs nothing while it is shut, however much the document changes', () => {
+    load()
+    render(<ExportDialog />)
+
+    act(() => {
+      for (const width of [30, 31, 32, 33]) useConfigStore.getState().set('ui.sidebar_width', width)
+    })
+
+    expect(hunkCalls.count).toBe(0)
+  })
+
+  it('diffs once the diff tab is the one showing, and not on the file tab', async () => {
+    const user = userEvent.setup()
+    load()
+    useConfigStore.getState().set('theme.name', 'gruvbox')
+    show()
+
+    expect(hunkCalls.count).toBe(0)
+
+    await user.click(screen.getByRole('tab', { name: 'changed hunks' }))
+
+    expect(hunkCalls.count).toBeGreaterThan(0)
+    expect(diffPane().getByText('+name = "gruvbox"')).toBeInTheDocument()
+  })
+
+  it('shows the edits made while it was shut, not what it last computed', async () => {
+    const user = userEvent.setup()
+    load()
+    render(<ExportDialog />)
+
+    act(() => {
+      useConfigStore.getState().set('theme.name', 'gruvbox')
+      useShellStore.getState().openExport('file')
+    })
+
+    expect(screen.getByLabelText('config.toml as it will be written')).toHaveTextContent(
+      'name = "gruvbox"',
+    )
+
+    await user.click(screen.getByRole('tab', { name: 'changed hunks' }))
+    expect(diffPane().getByText('+name = "gruvbox"')).toBeInTheDocument()
   })
 
   it('writes a whole file when the session started from the defaults', () => {

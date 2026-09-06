@@ -47,13 +47,33 @@ function formatBytes(bytes: number): string {
 /**
  * True when this file is plausibly a config.
  *
- * The name decides when it has the extension, because a `.toml` dragged out of a
- * dotfiles repo often arrives with an empty or invented MIME type; otherwise the
- * browser's own `text/plain` is taken at its word, which is what a config saved
- * without an extension looks like.
+ * The name decides when it has the extension. Otherwise the browser's own type is
+ * read, and **an empty type counts**: Chromium has no MIME type for a file with no
+ * extension or an unknown one, which is exactly what a config saved as `herdrrc`
+ * looks like, so refusing on an empty type would turn the common case away. What
+ * that lets through is decided by the parser a moment later, which is the more
+ * honest judge of whether a file is TOML — and a real binary still carries a type
+ * of its own (`image/png`, `application/pdf`) and is refused here by name.
  */
 function looksLikeConfig(file: File): boolean {
-  return file.name.toLowerCase().endsWith('.toml') || file.type === 'text/plain'
+  return (
+    file.name.toLowerCase().endsWith('.toml') || file.type === 'text/plain' || file.type === ''
+  )
+}
+
+/**
+ * The first paragraph of a smol-toml error — the sentence, without the excerpt.
+ *
+ * `TomlError.message` is the summary, a blank line, then the same three-line caret
+ * excerpt that `codeblock` holds. The landing shows the excerpt in a `<pre>` of its
+ * own, so taking the message whole would print it twice. The library's own
+ * "Invalid TOML document" preamble goes too, because the sentence around it has
+ * already said that.
+ */
+const PREAMBLE = /^invalid toml document:\s*/i
+
+function errorSummary(error: TomlSyntaxError): string {
+  return error.message.split('\n\n')[0].trim().replace(PREAMBLE, '')
 }
 
 /** What went wrong, and — for a syntax error — where. */
@@ -74,7 +94,7 @@ export function Landing() {
     const error = useConfigStore.getState().loadText(text)
     if (error !== null) {
       setFailure({
-        message: `that is not valid TOML — line ${error.line}, column ${error.column}: ${error.message}`,
+        message: `that is not valid TOML — line ${error.line}, column ${error.column}: ${errorSummary(error)}`,
         position: error,
       })
       return

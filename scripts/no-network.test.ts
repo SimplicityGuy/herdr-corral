@@ -18,15 +18,18 @@ import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-/** Ways a browser starts a request, by name. */
-const NETWORK_CALLS = [
-  'fetch(',
-  'XMLHttpRequest',
-  'WebSocket',
-  'EventSource',
-  'navigator.sendBeacon',
-  'import(',
-]
+/**
+ * Ways a browser starts a request, by name.
+ *
+ * A dynamic `import()` is deliberately not on the list. Vite resolves one into a
+ * chunk of the app served from its own origin — the same category as the font
+ * subset, not a call home — and the string also appears in type positions like
+ * `typeof import('@/lib/diff')`, where a blunt grep cannot tell the two apart. The
+ * runtime half of the claim is covered where it can be seen: the e2e spec watches
+ * the wire while a file goes in and comes out, and fails on any off-origin request
+ * or any fetch at all.
+ */
+const NETWORK_CALLS = ['fetch(', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'navigator.sendBeacon']
 
 const SOURCE_ROOT = path.resolve(import.meta.dirname, '../src')
 

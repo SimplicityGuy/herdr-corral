@@ -55,20 +55,41 @@ export function downloadConfig(fileName: string): void {
 }
 
 /**
+ * A heredoc terminator that does not appear as a line of `body`.
+ *
+ * The shell ends an unindented heredoc at the first line that is exactly the
+ * terminator, and TOML can hold one: a multi-line string whose content is the
+ * word `EOF` is a legal value, and so is a comment consisting of it. Left alone
+ * that would end the heredoc early and write a **truncated config**, silently,
+ * because the shell would then try to run the rest of the file as commands. So
+ * the word is chosen against the body rather than assumed, and the loop is bounded
+ * by the body itself — each candidate that collides is one line of the file.
+ */
+export function heredocTerminator(body: string): string {
+  const lines = new Set(body.split('\n'))
+  if (!lines.has('EOF')) return 'EOF'
+  if (!lines.has('EOF_CORRAL')) return 'EOF_CORRAL'
+  for (let suffix = 1; ; suffix += 1) {
+    const candidate = `EOF_CORRAL_${suffix}`
+    if (!lines.has(candidate)) return candidate
+  }
+}
+
+/**
  * The heredoc that installs `text` and tells a running herdr to re-read it.
  *
- * Quoted `<<'EOF'` on purpose: the config is full of `$status`, `#` and
- * backslashes, and an unquoted heredoc would let the shell expand them into a
- * file that no longer says what the editor showed. The body is newline-terminated
- * so the closing `EOF` starts its own line whatever the config ends with, and the
- * terminator itself is `EOF` at column zero, which is what an unindented heredoc
- * needs.
+ * Quoted on purpose: the config is full of `$status`, `#` and backslashes, and an
+ * unquoted heredoc would let the shell expand them into a file that no longer says
+ * what the editor showed. The body is newline-terminated so the terminator starts
+ * its own line whatever the config ends with, and it sits at column zero, which is
+ * what an unindented heredoc needs.
  */
 export function installSnippet(text: string = exportedText()): string {
   const body = text.endsWith('\n') ? text : `${text}\n`
+  const end = heredocTerminator(body)
   return [
-    `mkdir -p ~/.config/herdr && cat > ${CONFIG_PATH} <<'EOF'`,
-    body + 'EOF',
+    `mkdir -p ~/.config/herdr && cat > ${CONFIG_PATH} <<'${end}'`,
+    body + end,
     'herdr server reload-config',
     '',
   ].join('\n')

@@ -9,6 +9,10 @@
  * back is a file herdr would ignore. The download is disabled while any error
  * stands, and the tooltip says why rather than leaving a dead button.
  *
+ * The file name is `FILE_NAME`, not a prop: the dialog behind both verbs writes
+ * that one name, and a line that could be told to say something else would be
+ * offering to write a file nothing downstream would produce.
+ *
  * Neither verb writes anything itself any more: both open the export dialog, `:w`
  * on the file and `:diff` on the hunks, and the dialog is where the download, the
  * clipboard and the install snippet live. `:w` stays disabled while an error
@@ -22,7 +26,7 @@ import { BLOCKED_REASON, FILE_NAME } from '@/lib/download'
 import { changedLeaves, useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
 
-export function DiagnosticsLine({ fileName = FILE_NAME }: { fileName?: string }) {
+export function DiagnosticsLine() {
   const mode = useShellStore((state) => state.mode)
   const diagnostics = useDiagnostics()
   const changed = useConfigStore(changedLeaves)
@@ -71,12 +75,12 @@ export function DiagnosticsLine({ fileName = FILE_NAME }: { fileName?: string })
               onClick={() => openExport('file')}
               className="flex h-diagnostics items-center bg-surface0 px-3 text-text disabled:text-overlay0"
             >
-              {`:w  download ${fileName}`}
+              {`:w  download ${FILE_NAME}`}
             </button>
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          {blocked ? BLOCKED_REASON : `review and write ${fileName}, comments and all`}
+          {blocked ? BLOCKED_REASON : `review and write ${FILE_NAME}, comments and all`}
         </TooltipContent>
       </Tooltip>
     </footer>

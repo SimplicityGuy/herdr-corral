@@ -59,15 +59,23 @@ const PENDING_LABEL: Record<Pending, string> = {
 
 export function ExportDialog() {
   const tab = useShellStore((state) => state.exportTab)
-  const text = useConfigStore(exportText)
-  const original = useConfigStore((state) => state.originalText)
+  const open = tab !== null
+  // Both of these walk the whole file, and the dialog is shut for almost all of a
+  // session: patching a megabyte of TOML and diffing it on every keystroke of an
+  // edit nobody has asked to see is work with no reader. The selector and the memo
+  // are gated on the dialog being open, so a shut dialog costs a boolean.
+  const text = useConfigStore((state) => (open ? exportText(state) : ''))
+  const original = useConfigStore((state) => (open ? state.originalText : ''))
   const dirty = useConfigStore(isDirty)
   const changed = useConfigStore((state) => state.changedLeaves().length)
   const diagnostics = useDiagnostics()
   const [status, setStatus] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
 
-  const hunks = useMemo(() => unifiedHunks(original, text), [original, text])
+  const hunks = useMemo(
+    () => (tab === 'diff' ? unifiedHunks(original, text) : []),
+    [tab, original, text],
+  )
 
   const firstError = diagnostics.find((diagnostic) => diagnostic.severity === 'error')
   // The blocked controls are disabled, and a disabled control with no explanation
@@ -102,7 +110,7 @@ export function ExportDialog() {
   }
 
   return (
-    <Dialog open={tab !== null} onOpenChange={(open) => !open && close()}>
+    <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent
         className="flex max-h-[86dvh] w-full max-w-[min(920px,calc(100%-2rem))] flex-col gap-[10px] border border-surface1 bg-mantle p-[14px] text-[13px] text-text sm:max-w-[min(920px,calc(100%-2rem))]"
       >

@@ -25,7 +25,6 @@ import { Panel } from '@/components/shell/Panel'
 import { SettingsTree } from '@/components/shell/SettingsTree'
 import { TopLine } from '@/components/shell/TopLine'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { FILE_NAME } from '@/lib/download'
 import { useShellStore } from '@/store/shell'
 
 export default function App() {
@@ -45,7 +44,7 @@ export default function App() {
           </Panel>
         </div>
 
-        <DiagnosticsLine fileName={FILE_NAME} />
+        <DiagnosticsLine />
         <InlinePopover />
         <CommandPalette />
         <ExportDialog />

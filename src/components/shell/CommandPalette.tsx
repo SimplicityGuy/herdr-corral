@@ -137,8 +137,9 @@ export function CommandPalette() {
             >
               reset key to herdr&rsquo;s default
             </CommandItem>
-            {/* `:w` is in the value, not just the label, because cmdk scores the
-                value and the user types the verb they see on the line. */}
+            {/* `:w` and `:diff` are in the values, not just the labels, because
+                cmdk scores the value and the user types the verb they see on the
+                diagnostics line. */}
             <CommandItem
               value={`:w download ${FILE_NAME}`}
               disabled={blocked}
@@ -146,6 +147,15 @@ export function CommandPalette() {
             >
               <span>{`:w  download ${FILE_NAME}`}</span>
               {blocked && <span className="ml-auto text-overlay0">{BLOCKED_REASON}</span>}
+            </CommandItem>
+            {/* Never disabled, and the whole point of that: with an error standing
+                the write door is shut, and this is how the user reaches the dialog
+                that names what is wrong. */}
+            <CommandItem
+              value=":diff review the changes"
+              onSelect={() => run(() => useShellStore.getState().openExport('diff'))}
+            >
+              {':diff  review the changes'}
             </CommandItem>
             {UI_SECTIONS.map((section) => (
               <CommandItem
