@@ -9,7 +9,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { UnwritablePathError } from '@/model/export'
-import { REMOVED, useConfigStore, resetConfigStore } from '@/store/config'
+import { MAX_HISTORY, REMOVED, useConfigStore, resetConfigStore } from '@/store/config'
 import fixture from '@/test/fixture-user-config.toml?raw'
 
 const store = () => useConfigStore.getState()
@@ -203,6 +203,28 @@ describe('paths that are not settings', () => {
     expect(store().exportText()).toBe(fixture)
   })
 
+  it('refuses a path that names one entry of a list of tables', () => {
+    expect(() =>
+      store().set('keys.command[2]', { key: 'x', type: 'pane', command: 'zsh' }),
+    ).toThrow(UnwritablePathError)
+    expect(store().exportText()).toBe(fixture)
+  })
+
+  it('refuses a list of tables at a key the schema has not declared as one value', () => {
+    store().loadDefaults()
+    expect(() => store().set('keys.command', [{ key: 'x', type: 'pane' }])).toThrow(
+      UnwritablePathError,
+    )
+    expect(() =>
+      store().set('ui.sidebar.agents.rows_by_agent.claude', [{ token: 'agent' }]),
+    ).toThrow(UnwritablePathError)
+  })
+
+  it('still takes the list of tables the schema does declare', () => {
+    store().set('ui.tab_bar_right', [{ type: 'zoom' }, { type: 'hostname' }])
+    expect(store().changedLeaves()).toEqual(['ui.tab_bar_right'])
+  })
+
   it('still takes the fields inside them', () => {
     store().set('keys.command[0].command', 'gitui')
     store().set('theme.custom.accent', '#ffffff')
@@ -327,6 +349,19 @@ describe('undo and redo', () => {
     expect(store().future).toHaveLength(1)
     store().set('theme.name', 'nord')
     expect(store().future).toEqual([])
+  })
+
+  it('keeps the stack bounded and drops the oldest steps', () => {
+    for (let width = 1; width <= MAX_HISTORY + 20; width++) {
+      store().set('ui.sidebar_width', width)
+    }
+    expect(store().past).toHaveLength(MAX_HISTORY)
+    for (let step = 0; step < MAX_HISTORY; step++) store().undo()
+    // The 20 oldest states fell off the back, the clean one among them: undo can no
+    // longer reach the file's own 26, and stops at the earliest state still held.
+    expect(store().effective('ui.sidebar_width')).toBe(20)
+    store().undo()
+    expect(store().effective('ui.sidebar_width')).toBe(20)
   })
 
   it('does nothing at either end of the history', () => {

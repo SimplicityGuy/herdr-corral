@@ -15,9 +15,11 @@
  * the export diff, keyed on the identity of the edit map that produced it, so the shell
  * can read `isDirty` on every render without rebuilding a 167-key comparison.
  *
- * Undo and redo are stacks of whole `edits` maps. A map is never mutated, so a stack
- * entry is a pointer to the map that was current at the time — structural sharing, not a
- * deep copy — and undo is a pointer swap however large the config gets.
+ * Undo and redo are stacks of whole `edits` maps. Each `set` copies the map once, and
+ * every stack entry after that is a pointer to a map that already exists — the sharing is
+ * per stack entry, not per edit — so undo is a pointer swap however large the config gets.
+ * The copy itself is the cost that grows, so `past` is capped at `MAX_HISTORY` steps and
+ * the oldest states fall off the back rather than accumulating for a whole session.
  *
  * Two invariants of the epic are load-bearing here. Export compares *explicitly set*
  * values rather than effective ones, so setting a key to its own default still writes it
@@ -32,7 +34,9 @@ import {
   diff,
   generate,
   isLeaf,
+  isTableArrayValue,
   isUnder,
+  isWholeValueKey,
   patch,
   valuesEqual,
 } from '@/model/export'
@@ -172,12 +176,22 @@ function valueAt(value: TomlValue, segments: readonly PathSegment[]): TomlValue 
  * write is the only honest answer — the editors address the fields inside instead, which
  * is what `TomlDocument` can actually patch in place.
  */
-function writablePath(doc: ConfigDocument, path: string): string {
+function writablePath(doc: ConfigDocument, path: string, value?: TomlValue): string {
   const target = normalizePath(path)
-  if (isLeaf(target, doc.parsed, doc.edits)) return target
-  throw new UnwritablePathError(
-    `${target} names a table, not a setting; edit the keys inside it instead`,
-  )
+  if (!isLeaf(target, doc.parsed, doc.edits)) {
+    throw new UnwritablePathError(
+      `${target} names a table, not a setting; edit the keys inside it instead`,
+    )
+  }
+  // A path can look like a setting until you see the value. An array of tables is read
+  // back as its fields, so writing one anywhere the schema has not declared a whole value
+  // gives a file corral would not load the way it wrote it.
+  if (value !== undefined && isTableArrayValue(value) && !isWholeValueKey(target)) {
+    throw new UnwritablePathError(
+      `${target} cannot hold a list of tables; set the fields of each entry instead`,
+    )
+  }
+  return target
 }
 
 /** edits ⊕ parsed ⊕ schema default, for one path. */
@@ -282,6 +296,21 @@ export function explicitOf(doc: ConfigDocument): ConfigValues {
   return derive(doc).explicit
 }
 
+/**
+ * How many undo steps are kept.
+ *
+ * Each step holds a full copy of the edit map, so an unbounded stack would retain every
+ * intermediate state of a long session. Two hundred is far more than a person reaches for
+ * and bounds the retained copies at a fixed number.
+ */
+export const MAX_HISTORY = 200
+
+/** Push the state being left onto the undo stack, dropping the oldest past the cap. */
+function pushHistory(past: readonly Edits[], leaving: Edits): readonly Edits[] {
+  const next = [...past, leaving]
+  return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
+}
+
 /** The state a fresh session starts from: herdr's defaults, nothing set, nothing done. */
 export function initialConfigState(): ConfigState {
   return {
@@ -321,7 +350,7 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
 
   set(path, value) {
     const state = get()
-    const target = writablePath(state, path)
+    const target = writablePath(state, path, value)
     const edit = state.edits.get(target)
     const settled = edit === undefined ? state.parsed.get(target) : edit === REMOVED ? undefined : edit
     // A key that is not set at all is never a no-op, even when the new value matches the
@@ -329,7 +358,7 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
     if (settled !== undefined && valuesEqual(settled, value)) return
     const edits = new Map(state.edits)
     edits.set(target, value)
-    write({ edits, past: [...state.past, state.edits], future: [] })
+    write({ edits, past: pushHistory(state.past, state.edits), future: [] })
   },
 
   reset(path) {
@@ -342,7 +371,7 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
     const edits = new Map(state.edits)
     if (inFile) edits.set(target, REMOVED)
     else edits.delete(target)
-    write({ edits, past: [...state.past, state.edits], future: [] })
+    write({ edits, past: pushHistory(state.past, state.edits), future: [] })
   },
 
   undo() {
@@ -360,7 +389,7 @@ export const useConfigStore = create<ConfigStore>()((write, get) => ({
     const state = get()
     const [next, ...rest] = state.future
     if (next === undefined) return
-    write({ edits: next, past: [...state.past, state.edits], future: rest })
+    write({ edits: next, past: pushHistory(state.past, state.edits), future: rest })
   },
 
   select(next) {
