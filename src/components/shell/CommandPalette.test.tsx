@@ -83,6 +83,45 @@ describe('CommandPalette', () => {
     expect(blocked).toHaveTextContent(BLOCKED_REASON)
   })
 
+  it('matches the download on the verb the line prints, `:w`', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), ':w')
+
+    expect(await screen.findByRole('option', { name: /download config\.toml/ })).toBeInTheDocument()
+  })
+
+  it('opens the export dialog rather than writing the file behind the user', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), ':w')
+    await user.click(await screen.findByRole('option', { name: /download config\.toml/ }))
+
+    expect(useShellStore.getState().exportTab).toBe('file')
+    expect(useShellStore.getState().paletteOpen).toBe(false)
+  })
+
+  it('reaches the diff from the palette, and does so while an error stands', async () => {
+    const user = userEvent.setup()
+    // With an error the write door is shut at both ends, so this is the only way
+    // in to the dialog that names what is wrong.
+    useConfigStore.getState().set('ui.sidebar_width', 'wide')
+    render(<CommandPalette />)
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), ':diff')
+    const item = await screen.findByRole('option', { name: /:diff/ })
+    expect(item).not.toHaveAttribute('data-disabled', 'true')
+
+    await user.click(item)
+
+    expect(useShellStore.getState().exportTab).toBe('diff')
+  })
+
   it('shows each setting with what it currently reads', async () => {
     const user = userEvent.setup()
     render(<CommandPalette />)

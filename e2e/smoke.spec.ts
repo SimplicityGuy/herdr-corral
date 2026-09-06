@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { openConsole } from './console.ts'
 
 test('the Console shell loads with its top line', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
 
   await expect(page).toHaveTitle('corral')
 
@@ -13,7 +14,7 @@ test('the Console shell loads with its top line', async ({ page }) => {
 })
 
 test('the shell has the anatomy ADR-0002 draws', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
 
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
   await expect(page.getByRole('region', { name: /^preview/ })).toBeVisible()
@@ -27,8 +28,8 @@ test('the shell has the anatomy ADR-0002 draws', async ({ page }) => {
  * switches, the filter, the row cursor, the editor, undo, and the palette.
  */
 test('the whole shell is reachable from the keyboard alone', async ({ page }) => {
-  await page.goto('/')
   await page.setViewportSize({ width: 1280, height: 820 })
+  await openConsole(page)
 
   const nav = page.getByRole('navigation', { name: 'Sections' })
 
@@ -96,7 +97,7 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
 })
 
 test('the download is refused while the config has an error', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
 
   // 99999 is past herdr's u16 ceiling, so its deserializer rejects the file and
   // herdr would start on defaults — an error, not a warning.
@@ -125,7 +126,7 @@ test('the download is refused while the config has an error', async ({ page }) =
 for (const width of [960, 1020, 1280]) {
   test(`the top line stays one 30px row at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 })
-    await page.goto('/')
+    await openConsole(page)
 
     const header = page.getByRole('banner')
     await expect(header).toBeVisible()
@@ -157,7 +158,7 @@ for (const width of [960, 1020, 1280]) {
  */
 test('clicking an agent row in the preview edits the rows that draw it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
-  await page.goto('/')
+  await openConsole(page)
 
   const preview = page.getByRole('region', { name: /^preview/ })
   const row = preview.getByRole('button', { name: 'agent claude' })
@@ -193,7 +194,7 @@ for (const region of [
 ]) {
   test(`the popover for "${region}" opens fully inside the window`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 820 })
-    await page.goto('/')
+    await openConsole(page)
 
     await page.getByRole('region', { name: /^preview/ }).getByRole('button', { name: region }).click()
 
@@ -209,7 +210,7 @@ for (const region of [
 
 test('the shell matches the reference at 1280x820', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
-  await page.goto('/')
+  await openConsole(page)
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
 
   // The mock's anatomy, as console-direction.html draws it: a tab row with its
