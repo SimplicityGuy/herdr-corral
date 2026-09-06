@@ -17,8 +17,12 @@ test('the shell has the anatomy ADR-0002 draws', async ({ page }) => {
   await openConsole(page)
 
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
+  // The shell opens on `layout`, which SectionForm claims as a typed form
+  // rather than the herdr preview — see the forms spec for that center frame.
+  // `sidebar` still shows the real mock; the switch is only what changed.
+  await page.keyboard.press('2')
   await expect(page.getByRole('region', { name: /^preview/ })).toBeVisible()
-  await expect(page.getByLabel('mode')).toHaveText('EDIT')
+  await expect(page.getByLabel('mode', { exact: true })).toHaveText('EDIT')
   await expect(page.getByText('0 keys changed')).toBeVisible()
   await expect(page.getByRole('button', { name: /download config\.toml/ })).toBeEnabled()
 })
@@ -32,6 +36,10 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
   await openConsole(page)
 
   const nav = page.getByRole('navigation', { name: 'Sections' })
+  // Rows, from here on: the settings tree, not `SectionForm`'s own controls —
+  // `all` (pressed below) mounts both, and a form field's stepper buttons for
+  // `ui.sidebar_min_width` share the tree row's name prefix.
+  const tree = page.getByRole('region', { name: 'settings' })
 
   // 1–6 switch sections.
   await page.keyboard.press('4')
@@ -52,16 +60,16 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
   // the walk expects: a bare `sidebar_` also matches `theme.custom.sidebar_bg`,
   // and the reference page lists theme before ui.
   await page.keyboard.type('ui.sidebar_')
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^theme\.name/ })).toHaveCount(0)
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeVisible()
+  await expect(tree.getByRole('button', { name: /^theme\.name/ })).toHaveCount(0)
 
   // tab leaves the filter for the tree, and j/k move the row cursor from there.
   await page.keyboard.press('Tab')
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
   await page.keyboard.press('j')
-  await expect(page.getByRole('button', { name: /^ui\.sidebar_min_width/ })).toBeFocused()
+  await expect(tree.getByRole('button', { name: /^ui\.sidebar_min_width/ })).toBeFocused()
   await page.keyboard.press('k')
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
 
   // enter opens the editor, esc closes it and changes nothing.
   await page.keyboard.press('Enter')
@@ -69,20 +77,20 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
   await expect(popover).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(popover).toBeHidden()
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeFocused()
 
   // enter applies, and the tree and the diagnostics line both say so.
   await page.keyboard.press('Enter')
   await page.keyboard.press('ControlOrMeta+a')
   await page.keyboard.type('34')
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 34' })).toBeVisible()
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 34' })).toBeVisible()
   await expect(page.getByText('1 key changed')).toBeVisible()
 
   // u undoes it. Focus is already back on the row the popover was anchored to.
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 34' })).toBeFocused()
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 34' })).toBeFocused()
   await page.keyboard.press('u')
-  await expect(page.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeVisible()
+  await expect(tree.getByRole('button', { name: 'ui.sidebar_width = 26' })).toBeVisible()
   await expect(page.getByText('0 keys changed')).toBeVisible()
 
   // ctrl+k opens the palette and jumps to a key in another section.
@@ -93,7 +101,7 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
     'aria-current',
     'page',
   )
-  await expect(page.getByRole('button', { name: /^theme\.auto_switch/ })).toBeFocused()
+  await expect(tree.getByRole('button', { name: /^theme\.auto_switch/ })).toBeFocused()
 })
 
 test('the download is refused while the config has an error', async ({ page }) => {
@@ -159,6 +167,10 @@ for (const width of [960, 1020, 1280]) {
 test('clicking an agent row in the preview edits the rows that draw it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
+  // The shell opens on layout, where SectionForm claims the center frame;
+  // the mock itself is not section-filtered, so any other section shows the
+  // whole thing, agent row and pane border alike.
+  await page.keyboard.press('2')
 
   const preview = page.getByRole('region', { name: /^preview/ })
   const row = preview.getByRole('button', { name: 'agent claude' })
@@ -195,6 +207,9 @@ for (const region of [
   test(`the popover for "${region}" opens fully inside the window`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 820 })
     await openConsole(page)
+    // Layout, the default section, is SectionForm's center frame now; the
+    // mock itself is not section-filtered, so any other section shows it.
+    await page.keyboard.press('2')
 
     await page.getByRole('region', { name: /^preview/ }).getByRole('button', { name: region }).click()
 
@@ -212,6 +227,9 @@ test('the shell matches the reference at 1280x820', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 820 })
   await openConsole(page)
   await expect(page.getByRole('region', { name: 'settings' })).toBeVisible()
+  // Layout, the default section, is SectionForm's center frame now; switch to
+  // one the preview and keys beads still own to see the mock itself.
+  await page.keyboard.press('2')
 
   // The mock's anatomy, as console-direction.html draws it: a tab row with its
   // right-hand entries, the Spaces and Agents panels, two panes with `┤ ├`

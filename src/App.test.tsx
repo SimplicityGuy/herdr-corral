@@ -51,13 +51,13 @@ describe('App', () => {
     expect(nav).toHaveTextContent('[6] all')
   })
 
-  it('frames the settings and preview panels', () => {
+  it('frames the settings panel, and the center frame for the section it opens on', () => {
     render(<App />)
 
     expect(screen.getByRole('region', { name: 'settings' })).toBeInTheDocument()
-    expect(
-      screen.getByRole('region', { name: 'preview · click anything to edit it' }),
-    ).toBeInTheDocument()
+    // The shell opens on `layout`, which SectionForm claims as a center-frame
+    // view — see "fills the center frame with a typed form" below.
+    expect(screen.getByRole('region', { name: 'layout' })).toBeInTheDocument()
   })
 
   it('fills the settings panel with the section the shell opens on', () => {
@@ -67,7 +67,15 @@ describe('App', () => {
     expect(tree.getByRole('button', { name: /^ui\.pane_borders/ })).toBeInTheDocument()
   })
 
-  it('fills the preview frame with the herdr mock', () => {
+  it('fills the center frame with a typed form for layout, the section it opens on', () => {
+    render(<App />)
+
+    const form = within(screen.getByRole('region', { name: 'layout' }))
+    expect(form.getByLabelText('ui.pane_borders')).toBeInTheDocument()
+  })
+
+  it('fills the preview frame with the herdr mock for the sections layout and all do not claim', () => {
+    useShellStore.getState().setSection('sidebar')
     render(<App />)
 
     const preview = within(screen.getByRole('region', { name: /^preview/ }))

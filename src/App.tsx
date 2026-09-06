@@ -5,12 +5,14 @@
  * The visual contract is docs/design/console-direction.html; the tokens are in
  * src/index.css, and this file uses those and nothing else.
  *
- * The centre frame is one line per section — `CentreFrame` below. A section with
- * a focused editor of its own draws it there; every other section falls through
- * to the herdr mock, which is the default: `HerdrPreview` reads the effective
- * config and opens an editor for whichever region is clicked, through the same
- * `useShellStore.openEditor` the tree uses. That is also why the editor modules
- * are imported here — for the keys they register with `registerEditor`.
+ * The centre frame is one line per section — `CentreFrame` below. `SectionForm`
+ * draws the two non-visual sections (`layout`, `all`), `KeysEditor` draws `keys`;
+ * every other section falls through to the herdr mock, which is the default:
+ * `HerdrPreview` reads the effective config and opens an editor for whichever
+ * region is clicked, through the same `useShellStore.openEditor` the tree uses.
+ * That is also why the editor modules are imported here — for the keys they
+ * register with `registerEditor`. A bead adding its own editor for a remaining
+ * section replaces just its own line.
  *
  * The landing gate is the one branch in this file. There is no document until the
  * user opens one, and a preview drawn over herdr's defaults would claim there is,
@@ -23,6 +25,10 @@ import { KeysEditor } from '@/components/editors/KeysEditor'
 import { ExportDialog } from '@/components/io/ExportDialog'
 import { Landing } from '@/components/io/Landing'
 import { HerdrPreview } from '@/components/preview/HerdrPreview'
+
+import '@/components/editors/register-scalar-editors'
+
+import { SectionForm } from '@/components/editors/SectionForm'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
 import { InlinePopover } from '@/components/shell/InlinePopover'
@@ -58,8 +64,16 @@ export default function App() {
 /** What the centre column shows: one line per section, then the preview. */
 function CentreFrame() {
   const section = useShellStore((state) => state.section)
-  if (section === 'keys') return <KeysEditor />
-  return <PreviewFrame />
+  switch (section) {
+    case 'layout':
+      return <SectionForm section="layout" />
+    case 'all':
+      return <SectionForm section="all" />
+    case 'keys':
+      return <KeysEditor />
+    default:
+      return <PreviewFrame />
+  }
 }
 
 function PreviewFrame() {
