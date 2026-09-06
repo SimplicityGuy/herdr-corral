@@ -74,6 +74,7 @@ import {
   parseModifierCombo,
 } from '@/model/keys'
 import type { Chord } from '@/model/keys'
+import type { ConfigValues } from '@/model/export'
 import type { TomlTable, TomlValue } from '@/model/parse'
 import { parsePath } from '@/model/paths'
 
@@ -88,8 +89,14 @@ export interface Diagnostic {
   readonly message: string
 }
 
-/** The flat `path → value` map described in this module's docstring. */
-export type EffectiveConfig = ReadonlyMap<string, TomlValue>
+/**
+ * The flat `path → value` map described in this module's docstring.
+ *
+ * It is the same type the exporter diffs and the store keeps, so it is declared
+ * once, in `export.ts`, and re-exported here rather than restated. Two identical
+ * declarations are two things to keep in step, and the shell reads both modules.
+ */
+export type { ConfigValues }
 
 // ---------------------------------------------------------------------------
 // value shapes
@@ -648,7 +655,7 @@ function checkStringList(path: string, value: TomlValue, out: Diagnostics): void
  * collisions are the keybinding pass's job, because that needs one registry
  * across all of them.
  */
-function checkDeclaredTypes(effective: EffectiveConfig, out: Diagnostics): void {
+function checkDeclaredTypes(effective: ConfigValues, out: Diagnostics): void {
   for (const entry of allEntries()) {
     if (SPECIAL_KEYS.has(entry.key)) continue
     const value = effective.get(entry.key)
@@ -687,7 +694,7 @@ function checkDeclaredTypes(effective: EffectiveConfig, out: Diagnostics): void 
 // settings with rules of their own
 // ---------------------------------------------------------------------------
 
-function checkSoundPaths(effective: EffectiveConfig, out: Diagnostics): void {
+function checkSoundPaths(effective: ConfigValues, out: Diagnostics): void {
   for (const path of ['ui.sound.path', 'ui.sound.done_path', 'ui.sound.request_path']) {
     const value = effective.get(path)
     if (value === undefined) continue
@@ -711,12 +718,12 @@ function checkSoundPaths(effective: EffectiveConfig, out: Diagnostics): void {
  * (src/config/model.rs:237-250), so only its type can be checked. The `path`
  * option the reference lists is that escape hatch, not a literal value.
  */
-function checkNewCwd(effective: EffectiveConfig, out: Diagnostics): void {
+function checkNewCwd(effective: ConfigValues, out: Diagnostics): void {
   const value = effective.get('terminal.new_cwd')
   if (value !== undefined) checkString('terminal.new_cwd', value, out)
 }
 
-function checkRightClickModifier(effective: EffectiveConfig, out: Diagnostics): void {
+function checkRightClickModifier(effective: ConfigValues, out: Diagnostics): void {
   const path = 'ui.right_click_passthrough_modifier'
   const value = effective.get(path)
   if (value === undefined) return
@@ -744,7 +751,7 @@ function checkRightClickModifier(effective: EffectiveConfig, out: Diagnostics): 
  * failure leaves the outer terminal title alone rather than stopping herdr, so
  * these are warnings.
  */
-function checkWindowTitle(effective: EffectiveConfig, out: Diagnostics): void {
+function checkWindowTitle(effective: ConfigValues, out: Diagnostics): void {
   const path = 'ui.window_title'
   const value = effective.get(path)
   if (value === undefined) return
@@ -894,7 +901,7 @@ function checkTokenRows(
   }
 }
 
-function checkSidebarRows(effective: EffectiveConfig, out: Diagnostics): void {
+function checkSidebarRows(effective: ConfigValues, out: Diagnostics): void {
   for (const kind of ['agents', 'spaces'] as const) {
     const path = `ui.sidebar.${kind}.rows`
     const value = effective.get(path)
@@ -1018,7 +1025,7 @@ function checkTabBarEntry(path: string, entry: TomlValue, out: Diagnostics): voi
   }
 }
 
-function checkTabBarRight(effective: EffectiveConfig, out: Diagnostics): void {
+function checkTabBarRight(effective: ConfigValues, out: Diagnostics): void {
   const path = 'ui.tab_bar_right'
   const value = effective.get(path)
   if (value === undefined) return
@@ -1170,7 +1177,7 @@ function checkBindingField(
 }
 
 function checkKeybindings(
-  effective: EffectiveConfig,
+  effective: ConfigValues,
   out: Diagnostics,
   sourceOf: (path: string) => BindingSource,
 ): void {
@@ -1256,7 +1263,7 @@ function checkKeybindings(
  * (`append_legacy_indexed_bindings`, src/config/keybinds.rs:936-974).
  */
 function checkLegacyIndexed(
-  effective: EffectiveConfig,
+  effective: ConfigValues,
   registry: Registry,
   out: Diagnostics,
 ): void {
@@ -1311,7 +1318,7 @@ function checkPopupSize(path: string, value: TomlValue, out: Diagnostics): void 
 }
 
 function checkCommands(
-  effective: EffectiveConfig,
+  effective: ConfigValues,
   registry: Registry,
   out: Diagnostics,
 ): void {
@@ -1394,14 +1401,14 @@ function checkCommands(
  * A value that already failed its own type or range rule is treated as absent,
  * so a cross-field rule never piles a second complaint onto a bad number.
  */
-function integerAt(effective: EffectiveConfig, path: string): number | null {
+function integerAt(effective: ConfigValues, path: string): number | null {
   const value = effective.get(path)
   if (value === undefined || !isInteger(value) || value < 0) return null
   const max = INTEGER_BOUNDS.get(path)
   return max !== undefined && value > max ? null : value
 }
 
-function checkCrossFields(effective: EffectiveConfig, out: Diagnostics): void {
+function checkCrossFields(effective: ConfigValues, out: Diagnostics): void {
   const width = integerAt(effective, 'ui.sidebar_width')
   const min = integerAt(effective, 'ui.sidebar_min_width')
   const max = integerAt(effective, 'ui.sidebar_max_width')
@@ -1447,7 +1454,7 @@ function checkCrossFields(effective: EffectiveConfig, out: Diagnostics): void {
 // theme names
 // ---------------------------------------------------------------------------
 
-function checkThemeNames(effective: EffectiveConfig, out: Diagnostics): void {
+function checkThemeNames(effective: ConfigValues, out: Diagnostics): void {
   const fallbacks: Readonly<Record<string, string>> = {
     'theme.name': 'catppuccin',
     'theme.dark_name': 'catppuccin',
@@ -1506,7 +1513,7 @@ function sameValue(left: TomlValue | undefined, right: TomlValue | undefined): b
  * a conflict, because herdr drops the default without a word.
  */
 function bindingSources(
-  effective: EffectiveConfig,
+  effective: ConfigValues,
   userKeys: Iterable<string> | undefined,
 ): (path: string) => BindingSource {
   if (userKeys !== undefined) {
@@ -1533,7 +1540,7 @@ function bindingSources(
  *   inferred from the value.
  */
 export function validate(
-  effective: EffectiveConfig,
+  effective: ConfigValues,
   unknownKeys: readonly string[] = [],
   userKeys?: Iterable<string>,
 ): Diagnostic[] {

@@ -14,8 +14,15 @@
  *
  * Naming note: ADR-0002 calls corral's coral `--accent`. shadcn/ui already owns
  * `--accent` for a component's hover/selected background, so the ADR's accent
- * lives here as `--coral` / `bg-coral` / `text-coral`, and feeds shadcn's
- * `--primary` and `--ring`. Everything else keeps the ADR's name verbatim.
+ * lives here as `--coral` / `bg-coral` / `text-coral`. Everything else keeps the
+ * ADR's name verbatim.
+ *
+ * Coral feeds `--ring` and nothing else. ADR-0002 spends it on three things — the
+ * mode badge, the focus ring, the selected region — and shadcn's `--primary` is
+ * the fill of every default Button, so pointing `--primary` at coral would put a
+ * solid coral block behind every button in the app and leave the accent meaning
+ * nothing. `--primary` is `--surface0` with `--text` on it instead, which is how
+ * the mockup draws `:w download config.toml`: a chip, not a call to action.
  */
 @theme {
   /* Chrome palette — ADR-0002 */
@@ -104,8 +111,9 @@
   --card-foreground: var(--color-text);
   --popover: var(--color-mantle);
   --popover-foreground: var(--color-text);
-  --primary: var(--color-coral);
-  --primary-foreground: var(--color-crust);
+  /* A button is a `--surface0` chip; coral is reserved — see the note above. */
+  --primary: var(--color-surface0);
+  --primary-foreground: var(--color-text);
   --secondary: var(--color-surface0);
   --secondary-foreground: var(--color-text);
   --muted: var(--color-surface0);
@@ -126,8 +134,8 @@
 
   --sidebar: var(--color-mantle);
   --sidebar-foreground: var(--color-text);
-  --sidebar-primary: var(--color-coral);
-  --sidebar-primary-foreground: var(--color-crust);
+  --sidebar-primary: var(--color-surface0);
+  --sidebar-primary-foreground: var(--color-text);
   --sidebar-accent: var(--color-surface0);
   --sidebar-accent-foreground: var(--color-text);
   --sidebar-border: var(--color-surface1);

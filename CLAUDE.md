@@ -130,19 +130,56 @@ Layers and ownership — directories marked *(planned)* arrive with later beads:
 | --- | --- |
 | `src/schema/` | `reference.json` (generated from herdr.dev), `default-config.toml` (from `herdr --default-config`), `themes.json`, shared types and typed accessors |
 | `src/model/` | `paths.ts`, `parse.ts`, `toml-value.ts`, the comment-preserving patcher `toml-doc.ts`, the leaf diff / patch-or-generate exporter `export.ts`, the chord grammar `keys.ts` and the diagnostics in `validate.ts` |
-| `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits, effective config, undo/redo, selection |
+| `src/store/` | `config.ts` — zustand: source, original text, parsed values, edits, effective config, undo/redo, selection. `shell.ts` — the chrome's own view state: section, mode badge, tree filter, open popover, palette |
 | `src/components/preview/` *(planned)* | `HerdrPreview`, sample data, the region → keys map |
-| `src/components/shell/` *(planned)* | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, the inline popover host |
+| `src/components/shell/` | `TopLine`, `SettingsTree`, `DiagnosticsLine`, `CommandPalette`, `InlinePopover`, `Panel`, the editor registry and the generic value editor |
 | `src/components/editors/` *(planned)* | `RowsEditor`, `StatusBarEditor`, `KeysEditor`, `ThemeEditor`, `SectionForm` |
 | `src/components/io/` *(planned)* | `Landing` (import), `ExportDialog` (download / copy / snippet / diff) |
 | `src/components/ui/` | vendored shadcn components — regenerate with the CLI, do not hand-restyle |
-| `src/lib/` | `cn` and other cross-cutting helpers |
-| `src/test/` | vitest setup (jest-dom matchers, cleanup) |
+| `src/lib/` | `cn`, `sections.ts` (key → UI home), `diagnostics.ts`, `values.ts`, `tree.ts`, `popover.ts`, `edit.ts`, `download.ts` |
+| `src/test/` | vitest setup: jest-dom matchers, cleanup, and inert `ResizeObserver` / `scrollIntoView` stubs, which jsdom lacks and the vendored Radix and cmdk components call on mount |
 | `e2e/` | Playwright specs, run against `dist/` |
 | `scripts/` | `gen-reference.ts`, its parser and fixture, and other build-time generators |
 
-`src/App.tsx` currently holds a **static placeholder** of the Console chrome. The shell bead
-replaces the contents of its regions; it should not invent a different structure.
+`src/App.tsx` assembles the Console chrome. Later beads fill the regions it lays out — the
+centre frame is a placeholder until the preview bead — rather than inventing a new structure.
+
+### The shell's API
+
+Four small surfaces, and nothing else, are what a later bead needs:
+
+```ts
+import { useShellStore, anchorOf } from '@/store/shell'
+import { registerEditor, type EditorProps } from '@/components/shell/editor-registry'
+import { homeOf, keysOf } from '@/lib/sections'
+import { useDiagnostics } from '@/lib/diagnostics'
+```
+
+- **Open an editor.** `useShellStore.getState().openEditor({ key, anchor, region?, caption? })`
+  puts the popover on screen anchored to a viewport rectangle — `anchorOf(element)` builds one
+  — and mirrors `{ key, region }` into the config store's `selection`, so the tree's focused
+  row and the preview's selected outline follow without talking to each other. `closeEditor()`
+  is the other half; `esc` already calls it.
+- **Claim a key.** `registerEditor(key | predicate, Component)` at module scope, with `App.tsx`
+  importing the module that registers. The component takes `EditorProps` and calls exactly one
+  of `commit(value)` or `cancel()` — the popover owns the transaction, so `esc` cancels without
+  the editor hearing about it, and focus returns to whatever opened the popover.
+  Anything unclaimed falls through to the generic `ValueEditor`.
+- **Set the mode badge.** `useShellStore.getState().setMode('DRAG' | 'RECORD' | 'EDIT')`. The
+  diagnostics line reads it; nothing else does.
+- **Read diagnostics.** `useDiagnostics()` returns the current `Diagnostic[]`, computed once per
+  document and shared by the tree, the line and the popover. Do not call `validate()` again.
+
+The popover, not the editor, owns dismissal: `esc` is a document-level listener and a pointer
+press outside the frame cancels, so an editor with nothing focusable in it is still one the user
+can leave. `commit` and `cancel` settle it once — the open editor in the store is the latch, so
+whichever is called first wins and later calls are ignored. An editor torn down having called
+neither has cancelled, because `commit` is the only path that writes.
+
+`src/lib/sections.ts` is the map behind the six switches: `homeOf(key)` gives the one section
+that owns a key and `keysOf(section)` gives what the tree lists there. Adding an editor means
+adding a rule there, and `sections.test.ts` fails if a key ends up with no home or a rule with
+no key.
 
 ## Conventions & Patterns
 
@@ -161,8 +198,13 @@ Every bead preserves these, and tests enforce them:
    being an exception fails just as loudly as a new gap.
 4. **Validation mirrors herdr**: 16 rows × 16 tokens, `tab_bar_right` entries ≤ 16, chord
    grammar, navigate-mode restrictions, color syntax, enum sets, integer ranges.
-5. **Every schema key belongs to exactly one UI home** (`sections.test.ts`).
-6. **Download is blocked while diagnostics contain errors.**
+5. **Every schema key belongs to exactly one UI home** — `src/lib/sections.ts`, enforced by
+   `sections.test.ts`, which also fails a rule that no longer matches any key.
+6. **Download is blocked while diagnostics contain errors**, because herdr discards a file it
+   cannot deserialize and starts on defaults. `DiagnosticsLine` is where that is enforced.
+7. **A value is shown as the user spelled it.** `normalizeChord('plus')` answers `'+'`, which
+   `parseChord` does not read back, so the tree prints strings verbatim and only summarizes the
+   shapes that have no one-line spelling — as a count, which nobody mistakes for the value.
 
 ### Design language
 
@@ -176,8 +218,13 @@ The editor is a TUI in the browser and **the preview is the editor** (ADR-0002).
   `mauve` / `blue` / `teal` / `peach`). Never copy a hex value into a component, and never take
   colors from the mockup's inline styles.
 - ADR-0002 calls the coral accent `--accent`. shadcn/ui already owns `--accent` for a
-  component's hover background, so the coral is **`--color-coral`** here and feeds shadcn's
-  `--primary` and `--ring`. Every other token keeps the ADR's name verbatim.
+  component's hover background, so the coral is **`--color-coral`** here. Every other token
+  keeps the ADR's name verbatim.
+- **Coral feeds `--ring` and nothing else.** ADR-0002 spends it on three things — the mode
+  badge, the focus ring, the selected region — and `--primary` is the fill of every default
+  shadcn Button, so pointing `--primary` at coral would put a solid coral block behind every
+  button and leave the accent meaning nothing. `--primary` is `--surface0` on `--text`, which
+  is how the mockup draws `:w download config.toml`: a chip, not a call to action.
 - One font: JetBrains Mono Variable, self-hosted. 13px / 1.45 body, 12px in the preview and the
   diagnostics line, 11px for panel captions. No second face.
 - Square corners everywhere. `--radius: 0` and the collapsed `--radius-*` scale handle the
