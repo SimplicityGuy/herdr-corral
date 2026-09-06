@@ -67,6 +67,7 @@ import {
   groupedBindings,
   isConflictMessage,
   isNavigateAction,
+  pendingAgainst,
   parseSize,
   removeCommandOps,
 } from '@/lib/keybindings'
@@ -94,23 +95,6 @@ function useDraft(current: string): [string, (next: string) => void] {
     setDraft(current)
   }
   return [draft, setDraft]
-}
-
-/**
- * True when settling `draft` would actually change `current`.
- *
- * The store deliberately cannot answer this. A setting nobody has touched is
- * *unset*, and writing its documented default is a real edit by invariant 2 —
- * the difference between "herdr decides" and "I decided, and I decided this" —
- * so the store's own no-op guard never fires for one. Which means a field that
- * writes whatever it is handed records an edit for a row the user only focused
- * and left, and the export grows lines under a header promising only the
- * settings that differ from the defaults.
- *
- * Whitespace is not a change either: a value is written trimmed.
- */
-function pendingAgainst(current: string | null, draft: string): boolean {
-  return draft.trim() !== (current ?? '').trim()
 }
 
 /** herdr's documented default for a binding, as the row prints it. */

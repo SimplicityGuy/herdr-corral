@@ -157,6 +157,27 @@ export function isNavigateAction(path: string): boolean {
 }
 
 /**
+ * True when settling `draft` would actually change `current`.
+ *
+ * Every field in the editor settles on more than a keystroke — a recording,
+ * `enter`, the `prefix+` toggle, focus leaving the control — so most settles
+ * carry a value nobody touched, and one of them has to be told that is not an
+ * edit. The store cannot be the one to tell it: a setting nobody has touched is
+ * *unset*, and writing its documented default is a real edit by invariant 2, the
+ * difference between "herdr decides" and "I decided, and I decided this". So the
+ * store's own no-op guard never fires for one, and a field that writes whatever
+ * it is handed records an edit for a row somebody merely tabbed through — with
+ * the export growing lines under a header promising only the settings that
+ * differ from the defaults.
+ *
+ * Every write path in the editor and in the popover goes through this first.
+ * Whitespace is not a change either: a value is written trimmed.
+ */
+export function pendingAgainst(current: string | null, draft: string): boolean {
+  return draft.trim() !== (current ?? '').trim()
+}
+
+/**
  * Why a field will not write what it is holding, or `null` when it will.
  *
  * Two refusals, both of them herdr's. A string herdr's parser cannot read is not

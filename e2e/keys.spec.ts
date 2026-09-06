@@ -91,6 +91,11 @@ test('enter on a tree row records the chord in place', async ({ page }) => {
   const popover = page.getByRole('dialog', { name: 'keys.zoom' })
   await expect(popover).toBeVisible()
 
+  // Tab is trapped inside the popover and every step out of the field settles
+  // it, so walking the controls must not write the default back.
+  for (let step = 0; step < 4; step++) await page.keyboard.press('Tab')
+  await expect(page.getByText('0 keys changed')).toBeVisible()
+
   await popover.getByRole('button', { name: 'record keys.zoom' }).press('Enter')
   await page.keyboard.press('F5')
 

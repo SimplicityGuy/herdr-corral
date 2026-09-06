@@ -21,7 +21,7 @@
  */
 import { KeyChordInput } from '@/components/common/KeyChordInput'
 import { type EditorProps, registerEditor } from '@/components/shell/editor-registry'
-import { bindingProblem, isNavigateAction } from '@/lib/keybindings'
+import { bindingProblem, isNavigateAction, pendingAgainst } from '@/lib/keybindings'
 import { bindingValues } from '@/model/validate'
 import { useState } from 'react'
 
@@ -35,7 +35,9 @@ function isChordKey(path: string): boolean {
 
 export function ChordEditor({ path, value, diagnostics, commit, cancel }: EditorProps) {
   const held = value === undefined ? [] : bindingValues(value)
-  const [draft, setDraft] = useState(() => (held !== null && held.length === 1 ? held[0] : ''))
+  /** The one chord this key holds, or `''` when it holds none we can edit. */
+  const current = held !== null && held.length === 1 ? held[0] : ''
+  const [draft, setDraft] = useState(current)
 
   // A setting holding several chords has no one-line spelling, so there is
   // nothing here to record into — the same answer the generic editor gives for
@@ -58,6 +60,12 @@ export function ChordEditor({ path, value, diagnostics, commit, cancel }: Editor
 
   function apply(next: string): void {
     setDraft(next)
+    // Tabbing through the popover settles the field on the way out, and a key
+    // sitting on its schema default is unset — so committing an unchanged value
+    // here would write a pure-default line for a key nobody edited. Same guard
+    // the section rows use, and it is also what stops the apply button writing
+    // a default back.
+    if (!pendingAgainst(current, next)) return
     if (next.trim() === '' || bindingProblem(path, next) !== null) return
     commit(next.trim())
   }

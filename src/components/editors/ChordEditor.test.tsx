@@ -60,6 +60,50 @@ describe('ChordEditor', () => {
     expect(useShellStore.getState().editor).toBeNull()
   })
 
+  it('writes nothing when the walk through it changes nothing', async () => {
+    const user = userEvent.setup()
+    render(<InlinePopover />)
+    open('keys.zoom')
+
+    // The popover traps tab, so this walks the record button, the field and the
+    // toggle and comes back round. Every step out of the control settles the
+    // field, and none of those settles is an edit: the key is on its schema
+    // default, which means unset, and writing it back would put a pure-default
+    // line in the file.
+    await user.tab()
+    await user.tab()
+    await user.tab()
+    await user.tab()
+
+    expect(useConfigStore.getState().changedLeaves()).toEqual([])
+    expect(useConfigStore.getState().isDirty()).toBe(false)
+    expect(useShellStore.getState().editor).not.toBeNull()
+  })
+
+  it('writes nothing when the apply button is pressed on an unchanged default', async () => {
+    const user = userEvent.setup()
+    render(<InlinePopover />)
+    open('keys.zoom')
+
+    await user.click(screen.getByRole('button', { name: 'apply keys.zoom' }))
+
+    expect(useConfigStore.getState().isDirty()).toBe(false)
+  })
+
+  it('still commits once the chord actually changes', async () => {
+    const user = userEvent.setup()
+    render(<InlinePopover />)
+    open('keys.zoom')
+
+    await user.tab()
+    const record = screen.getByRole('button', { name: 'record keys.zoom' })
+    await user.click(record)
+    fireEvent.keyDown(record, { key: 'F5' })
+
+    expect(useConfigStore.getState().effective('keys.zoom')).toBe('f5')
+    expect(useShellStore.getState().editor).toBeNull()
+  })
+
   it('applies a typed chord on enter', async () => {
     const user = userEvent.setup()
     render(<InlinePopover />)
