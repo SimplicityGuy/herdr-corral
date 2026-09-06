@@ -46,11 +46,25 @@ describe('SectionForm', () => {
     expect(screen.getByText('ui.sidebar.agents.rows')).toBeInTheDocument()
   })
 
-  it('still gives an ordinary theme key — not theme.custom.* — a real control', () => {
+  it('hands the whole theme table and ui.accent to the theme editor', () => {
     render(<SectionForm section="all" />)
 
-    expect(screen.getByLabelText('theme.name')).toBeInTheDocument()
-    expect(screen.getByLabelText('ui.accent')).toBeInTheDocument()
+    // They were Field's until the theme editor had swatches to put them in;
+    // `all` now names them and points at the form that owns them.
+    expect(screen.queryByLabelText('theme.name')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('ui.accent')).not.toBeInTheDocument()
+    expect(screen.getByText('theme.name')).toBeInTheDocument()
+    expect(screen.getByText('ui.accent').closest('div')).toHaveTextContent(
+      'color — edited by its own form',
+    )
+  })
+
+  it('keeps a real control for the tab bar scalars the status editor shares', () => {
+    render(<SectionForm section="all" />)
+
+    expect(screen.getByLabelText('ui.tab_bar_right_separator')).toBeInTheDocument()
+    expect(screen.getByLabelText('ui.tab_bar_position')).toBeInTheDocument()
+    expect(screen.getByLabelText('ui.hide_tab_bar_when_single_tab')).toBeInTheDocument()
   })
 
   it('groups the per-agent sound overrides into a compact grid', async () => {
