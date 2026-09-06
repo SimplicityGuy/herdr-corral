@@ -69,10 +69,21 @@ for (const entry of allEntries()) {
 const wholeValueList: readonly string[] = [...wholeValueKeys]
 
 /** True when `path` addresses something strictly inside `prefix`. */
-function isUnder(path: string, prefix: string): boolean {
+export function isUnder(path: string, prefix: string): boolean {
   if (path.length <= prefix.length || !path.startsWith(prefix)) return false
   const next = path[prefix.length]
   return next === '.' || next === '['
+}
+
+/**
+ * Order two dynamic paths, reading digit runs as numbers.
+ *
+ * `keys.command[10].key` sorts after `keys.command[2].key`, not before it, and a
+ * generated file's `[[keys.command]]` blocks come out in index order however the user
+ * built them up.
+ */
+function comparePaths(a: string, b: string): number {
+  return a.localeCompare(b, 'en', { numeric: true })
 }
 
 /**
@@ -83,18 +94,24 @@ function isUnder(path: string, prefix: string): boolean {
  * `keys.command[i].<field>` for each custom command. Two rules prune the result: a path
  * inside a whole-value key is not its own unit, and a path that merely *contains* other
  * units (`keys.command`) is not one either.
+ *
+ * The order is a function of the *set* of paths, never of the order they were added:
+ * schema keys keep the reference page's order, and the rest are sorted. Anything else
+ * would let `generate` write `[[keys.command]]` blocks in whatever order the user
+ * happened to touch them, so a file it wrote would not survive a reload and re-export.
  */
 export function leaves(...sources: readonly ConfigValues[]): string[] {
-  const candidates = [...schemaLeaves]
-  const seen = new Set(candidates)
+  const dynamic: string[] = []
+  const seen = new Set(schemaLeaves)
   for (const values of sources) {
     for (const raw of values.keys()) {
       const path = normalizePath(raw)
       if (seen.has(path)) continue
       seen.add(path)
-      candidates.push(path)
+      dynamic.push(path)
     }
   }
+  const candidates = [...schemaLeaves, ...dynamic.sort(comparePaths)]
   const standalone = candidates.filter(
     (path) =>
       !containerKeys.has(path) && !wholeValueList.some((whole) => isUnder(path, whole)),
@@ -102,6 +119,36 @@ export function leaves(...sources: readonly ConfigValues[]): string[] {
   return standalone.filter(
     (path) => wholeValueKeys.has(path) || !standalone.some((other) => isUnder(other, path)),
   )
+}
+
+/** Thrown when a path names a table rather than something an export can write. */
+export class UnwritablePathError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'UnwritablePathError'
+  }
+}
+
+/**
+ * True when `path` is a unit an export can write on its own.
+ *
+ * The same three rules `leaves` applies, decided for one path against the schema and the
+ * configs in play rather than by building the whole list — this runs on every keystroke
+ * that reaches the store. `leaves` remains the specification; a test pins the two
+ * together over the fixture.
+ */
+export function isLeaf(path: string, ...sources: readonly ReadonlyMap<string, unknown>[]): boolean {
+  const target = normalizePath(path)
+  if (containerKeys.has(target)) return false
+  if (wholeValueList.some((whole) => isUnder(target, whole))) return false
+  if (wholeValueKeys.has(target)) return true
+  if (schemaLeaves.some((key) => isUnder(key, target))) return false
+  for (const values of sources) {
+    for (const raw of values.keys()) {
+      if (isUnder(raw, target)) return false
+    }
+  }
+  return true
 }
 
 function isTable(value: TomlValue): value is Record<string, TomlValue> {

@@ -11,8 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { GENERATED_HEADER, diff, generate, leaves, patch } from '@/model/export'
-import { parseToml } from '@/model/parse'
+import { GENERATED_HEADER, diff, generate, isLeaf, leaves, patch } from '@/model/export'
+import { type TomlValue, parseToml } from '@/model/parse'
 import { useConfigStore, resetConfigStore } from '@/store/config'
 import fixture from '@/test/fixture-user-config.toml?raw'
 
@@ -78,6 +78,58 @@ describe('leaves', () => {
     const found = leaves(fixtureValues)
     expect(found).toContain('ui.sidebar.agents.rows_by_agent.claude')
     expect(found).not.toContain('ui.sidebar.agents.rows_by_agent')
+  })
+})
+
+describe('leaf order', () => {
+  it('sorts dynamic paths by index rather than by when they were seen', () => {
+    const backwards = new Map<string, TomlValue>([
+      ['keys.command[1].key', 'SECOND'],
+      ['keys.command[0].key', 'FIRST'],
+    ])
+    expect(leaves(backwards).filter((path) => path.startsWith('keys.command'))).toEqual([
+      'keys.command[0].key',
+      'keys.command[1].key',
+    ])
+  })
+
+  it('reads an index as a number, not as text', () => {
+    const many = new Map<string, TomlValue>(
+      [2, 10, 1].map((index) => [`keys.command[${index}].key`, 'x']),
+    )
+    expect(leaves(many).filter((path) => path.startsWith('keys.command'))).toEqual([
+      'keys.command[1].key',
+      'keys.command[2].key',
+      'keys.command[10].key',
+    ])
+  })
+
+  it('keeps the reference page order for schema keys', () => {
+    const listed = leaves()
+    expect(listed.indexOf('theme.name')).toBeLessThan(listed.indexOf('ui.sidebar_width'))
+    expect(listed.indexOf('ui.sidebar_width')).toBeLessThan(listed.indexOf('ui.accent'))
+  })
+})
+
+describe('isLeaf', () => {
+  it('agrees with the list leaves builds', () => {
+    const listed = new Set(leaves(fixtureValues))
+    const probes = new Set([
+      ...leaves(),
+      ...fixtureValues.keys(),
+      'keys.command',
+      'theme.custom',
+      'ui.sidebar.agents.rows_by_agent',
+      'ui.sidebar.agents',
+    ])
+    for (const path of probes) {
+      expect([path, isLeaf(path, fixtureValues)]).toEqual([path, listed.has(path)])
+    }
+  })
+
+  it('accepts a path no config has yet', () => {
+    expect(isLeaf('keys.command[9].key', fixtureValues)).toBe(true)
+    expect(isLeaf('ui.sidebar.agents.rows_by_agent.codex', fixtureValues)).toBe(true)
   })
 })
 
@@ -234,6 +286,27 @@ describe('generating from defaults', () => {
 
   it('writes nothing but the header when nothing was set', () => {
     expect(generate(new Map())).toBe(`${GENERATED_HEADER}\n`)
+  })
+
+  it('writes command blocks in index order however they were built', () => {
+    resetConfigStore()
+    store().loadDefaults()
+    store().set('keys.command[1].key', 'SECOND')
+    store().set('keys.command[0].key', 'FIRST')
+    const values = parseToml(store().exportText()).values
+    expect(values.get('keys.command[0].key')).toBe('FIRST')
+    expect(values.get('keys.command[1].key')).toBe('SECOND')
+  })
+
+  it('writes the same file again after a reload', () => {
+    resetConfigStore()
+    store().loadDefaults()
+    store().set('keys.command[1].key', 'prefix+alt+t')
+    store().set('keys.command[0].key', 'prefix+alt+g')
+    store().set('ui.sidebar.agents.rows_by_agent.claude', [['state_icon', 'workspace']])
+    store().set('theme.name', 'nord')
+    const first = store().exportText()
+    expect(generate(parseToml(first).values)).toBe(first)
   })
 
   it('round-trips through the parser', () => {
