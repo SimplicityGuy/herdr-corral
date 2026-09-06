@@ -13,6 +13,23 @@ This project uses **bd** (beads) for issue tracking. Run `bd prime` for full wor
 > source of truth; don't `bd import` during normal operation; don't
 > reach for third-party Dolt hosting before trying the default).
 
+## Working on corral
+
+Everything specific to this codebase lives in **`CLAUDE.md`**, and it applies to every agent,
+not only Claude. Read it before writing code. It carries:
+
+- **Build & Test** — the pnpm scripts, what each one does, and the nvm shim caveat that makes
+  `node` and `pnpm` fail in non-interactive shells on the maintainer's machine.
+- **Architecture Overview** — the layer map: which directory owns what, and which ones later
+  beads still have to create.
+- **Conventions & Patterns** — the six invariants every change preserves, the Console design
+  language rules (tokens, type, square corners, framed panels), and the tooling gotchas.
+
+The gate is `pnpm check` (typecheck, lint, unit tests, build). `pnpm test:e2e` runs separately.
+
+Design decisions are recorded in `docs/design/`: ADR-0001 for the stack, ADR-0002 for the
+Console design language, and `console-direction.html` as the visual contract for the shell.
+
 ## Quick Reference
 
 ```bash
