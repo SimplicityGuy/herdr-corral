@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
 import { type Page, expect, test } from '@playwright/test'
+import { openConsole } from './console.ts'
 
 /**
  * The mode badge, addressed exactly: `copy_mode` and `resize_mode` are rows on
@@ -8,17 +8,18 @@ import { type Page, expect, test } from '@playwright/test'
 const MODE = { exact: true } as const
 
 /**
- * The file corral would hand the user, read back through the real download.
+ * The file corral would hand the user, read out of the export dialog.
  *
- * Asserting the UI values proves the editor agrees with itself; only the bytes
- * of `:w` prove it agrees with herdr, which is what a config file is for.
+ * Asserting the UI values proves the editor agrees with itself; only the text
+ * behind `:w` proves it agrees with herdr, which is what a config file is for.
  */
-async function downloadedConfig(page: Page): Promise<string> {
-  const saving = page.waitForEvent('download')
+async function writtenConfig(page: Page): Promise<string> {
   await page.getByRole('button', { name: /download config\.toml/ }).click()
-  const download = await saving
-  const file = await download.path()
-  return readFile(file, 'utf8')
+  const dialog = page.getByRole('dialog')
+  const text = await dialog.getByLabel('config.toml as it will be written').innerText()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  return text
 }
 
 /**
@@ -32,8 +33,8 @@ async function downloadedConfig(page: Page): Promise<string> {
  * the translation `src/lib/capture.ts` exists to do.
  */
 test('recording a chord in section [4] writes it and the tree follows', async ({ page }) => {
-  await page.goto('/')
   await page.setViewportSize({ width: 1280, height: 820 })
+  await openConsole(page)
 
   await page.keyboard.press('4')
   await expect(
@@ -65,7 +66,7 @@ test('recording a chord in section [4] writes it and the tree follows', async ({
 })
 
 test('esc cancels a recording without touching the setting', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
   await page.keyboard.press('4')
 
   const record = page.getByRole('button', { name: 'record keys.split_vertical' })
@@ -79,7 +80,7 @@ test('esc cancels a recording without touching the setting', async ({ page }) =>
 })
 
 test('enter on a tree row records the chord in place', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
   await page.keyboard.press('4')
 
   await page.keyboard.press('/')
@@ -100,7 +101,7 @@ test('enter on a tree row records the chord in place', async ({ page }) => {
 test('a custom command is added, typed and written as a [[keys.command]] block', async ({
   page,
 }) => {
-  await page.goto('/')
+  await openConsole(page)
   await page.keyboard.press('4')
 
   await page.getByRole('button', { name: '+ add command' }).click()
@@ -116,7 +117,7 @@ test('a custom command is added, typed and written as a [[keys.command]] block',
   await expect(page.getByRole('textbox', { name: 'keys.command[0].width' })).toHaveValue('80%')
   await expect(page.getByRole('textbox', { name: 'keys.command[1].command' })).toBeHidden()
 
-  const written = await downloadedConfig(page)
+  const written = await writtenConfig(page)
   expect(written).toContain('[[keys.command]]')
   expect(written).toContain('key = "prefix+t"')
   expect(written).toContain('type = "popup"')
@@ -125,11 +126,11 @@ test('a custom command is added, typed and written as a [[keys.command]] block',
 
   await page.getByRole('button', { name: 'remove keys.command[0]' }).click()
   await expect(page.getByText(/none yet/)).toBeVisible()
-  expect(await downloadedConfig(page)).not.toContain('[[keys.command]]')
+  expect(await writtenConfig(page)).not.toContain('[[keys.command]]')
 })
 
 test('the prefix+ toggle reaches the file, not just the field', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
   await page.keyboard.press('4')
 
   await page.getByRole('checkbox', { name: 'prefix+ for keys.remote_image_paste' }).check()
@@ -140,11 +141,11 @@ test('the prefix+ toggle reaches the file, not just the field', async ({ page })
   await expect(
     page.getByRole('button', { name: 'keys.remote_image_paste = prefix+ctrl+v' }),
   ).toBeVisible()
-  expect(await downloadedConfig(page)).toContain('remote_image_paste = "prefix+ctrl+v"')
+  expect(await writtenConfig(page)).toContain('remote_image_paste = "prefix+ctrl+v"')
 })
 
 test('a chord typed and left behind is still written', async ({ page }) => {
-  await page.goto('/')
+  await openConsole(page)
   await page.keyboard.press('4')
 
   // Browsing rows is not editing them: a binding on its schema default is unset,
@@ -161,5 +162,5 @@ test('a chord typed and left behind is still written', async ({ page }) => {
   await page.getByRole('button', { name: 'reset keys.settings' }).click()
 
   await expect(page.getByRole('button', { name: 'keys.help = prefix+f1' })).toBeVisible()
-  expect(await downloadedConfig(page)).toContain('help = "prefix+f1"')
+  expect(await writtenConfig(page)).toContain('help = "prefix+f1"')
 })

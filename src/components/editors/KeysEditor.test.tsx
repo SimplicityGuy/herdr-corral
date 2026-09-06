@@ -2,7 +2,7 @@ import App from '@/App'
 import { KeysEditor } from '@/components/editors/KeysEditor'
 import { COMMAND_FIELDS, bindingKeys } from '@/lib/keybindings'
 import { resetConfigStore, useConfigStore } from '@/store/config'
-import { resetShellStore } from '@/store/shell'
+import { resetShellStore, useShellStore } from '@/store/shell'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -10,6 +10,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 beforeEach(() => {
   resetConfigStore()
   resetShellStore()
+  // corral opens on the import screen; every spec about the editor has to say
+  // which document it is editing first.
+  useShellStore.getState().setLanding(false)
 })
 
 /** Write a setting the way anything outside the editor would. */
