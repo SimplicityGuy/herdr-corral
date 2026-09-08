@@ -214,8 +214,6 @@ export function Landing() {
                 <span className="min-w-0 flex-1 text-[12px] text-overlay0">
                   Nothing you open leaves this tab. corral has no server.
                 </span>
-                <RepoLink className="text-[12px]" />
-                <SupportLink className="text-[12px]" />
                 <Button
                   type="button"
                   onClick={() => {
@@ -238,6 +236,13 @@ export function Landing() {
                   )}
                 </div>
               )}
+
+              {/* Their own line, so the note above keeps its width; the same two
+                  links the diagnostics line carries once a file is open. */}
+              <div className="flex items-center justify-end gap-[14px] text-[12px]">
+                <RepoLink />
+                <SupportLink />
+              </div>
             </div>
           </Panel>
         </div>
