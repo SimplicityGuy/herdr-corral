@@ -1,4 +1,5 @@
 import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
+import { REPO_TEXT, REPO_URL } from '@/components/shell/RepoLink'
 import { SUPPORT_TEXT, SUPPORT_URL } from '@/components/shell/SupportLink'
 import { BLOCKED_REASON } from '@/lib/download'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -73,6 +74,15 @@ describe('DiagnosticsLine', () => {
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
     expect(document.querySelector('script[src*="buymeacoffee"]')).toBeNull()
+  })
+
+  it('links to the repository in a new tab, with the mark and no fetched star count', () => {
+    show()
+
+    const link = screen.getByRole('link', { name: new RegExp(REPO_TEXT) })
+    expect(link).toHaveAttribute('href', REPO_URL)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('offers the download while the config is clean', () => {

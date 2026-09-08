@@ -19,6 +19,7 @@
  */
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/shell/Panel'
+import { RepoLink } from '@/components/shell/RepoLink'
 import { SupportLink } from '@/components/shell/SupportLink'
 import { Textarea } from '@/components/ui/textarea'
 import { FILE_NAME } from '@/lib/download'
@@ -213,6 +214,7 @@ export function Landing() {
                 <span className="min-w-0 flex-1 text-[12px] text-overlay0">
                   Nothing you open leaves this tab. corral has no server.
                 </span>
+                <RepoLink className="text-[12px]" />
                 <SupportLink className="text-[12px]" />
                 <Button
                   type="button"
