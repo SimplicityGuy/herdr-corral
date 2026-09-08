@@ -66,14 +66,14 @@ describe('DiagnosticsLine', () => {
     expect(screen.getByText(/1 warning/)).toHaveTextContent('not-a-theme')
   })
 
-  it('links to buy me a coffee in a new tab, styled as a verb rather than the vendor widget', () => {
+  it('links to ko-fi in a new tab, styled as a verb rather than the vendor widget', () => {
     show()
 
     const link = screen.getByRole('link', { name: new RegExp(SUPPORT_TEXT) })
     expect(link).toHaveAttribute('href', SUPPORT_URL)
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
-    expect(document.querySelector('script[src*="buymeacoffee"]')).toBeNull()
+    expect(document.querySelector('script[src*="ko-fi"]')).toBeNull()
   })
 
   it('links to the repository in a new tab, with the mark and no fetched star count', () => {
