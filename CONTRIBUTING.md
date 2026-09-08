@@ -1,15 +1,15 @@
-# Contributing to corral
+# Contributing to herdr-corral
 
-Thanks for looking at corral. It's a static single-page app that edits
+Thanks for looking at herdr-corral. It's a static single-page app that edits
 [herdr](https://herdr.dev)'s `config.toml` in the browser: no backend, no account, nothing
-leaves the tab. Most changes are front-end work in React and TypeScript, and the whole thing
-is built to be picked up quickly by someone who has never seen it before.
+leaves the tab. Most changes are front-end work in React and TypeScript, and the whole thing is
+built to be picked up quickly by someone who has never seen it before.
 
 ## Ways to help
 
 - **Report a bug.** Open an issue with the `config.toml` (or the part of it) that misbehaves,
-  what you did, what you expected, and what happened. A file corral round-trips wrongly is the
-  most useful report there is — see invariant 1 below for why.
+  what you did, what you expected, and what happened. A file herdr-corral round-trips wrongly
+  is the most useful report there is — see invariant 1 below for why.
 - **Track a herdr release.** When herdr adds or renames a setting, the schema needs
   regenerating; "Upgrading for a new herdr release" in the README is the recipe.
 - **Fix or add something.** Open an issue first for anything larger than a bug fix, so the
@@ -44,8 +44,8 @@ PLAYWRIGHT_PORT=4180 pnpm test:e2e
 
 ## Invariants
 
-corral hands users back a file they will keep, so a handful of rules are enforced by tests
-rather than by review. A change that breaks one of these fails the build; a change that needs
+herdr-corral hands users back a file they will keep, so a handful of rules are enforced by
+tests rather than by review. A change that breaks one of these fails the build; a change that needs
 to break one is a design change, and wants an issue first.
 
 1. **Export never regenerates a loaded file.** Edits are applied as targeted text patches, and
@@ -61,7 +61,7 @@ to break one is a design change, and wants an issue first.
 5. **Every schema key has exactly one UI home** (`src/lib/sections.ts`), and a test fails a key
    that has none.
 6. **Download is blocked while diagnostics contain errors.** herdr discards a config it cannot
-   deserialize, so corral will not hand one over. `:diff` and copying the text are never
+   deserialize, so herdr-corral will not hand one over. `:diff` and copying the text are never
    blocked.
 7. **No network calls at runtime.** `scripts/no-network.test.ts` sweeps `src/` for them. Fonts
    are self-hosted; third-party widgets are redrawn as plain links, not loaded as scripts.
@@ -121,9 +121,11 @@ version:
 
 ## Issue tracking for maintainers
 
-The maintainer drives work through [beads](https://github.com/gastownhall/beads) and the `bh`
-tooling described in `AGENTS.md` and `CLAUDE.md`. Outside contributors do not need any of
-that: a GitHub issue and a pull request are the whole process.
+The maintainer drives work through [beads](https://github.com/gastownhall/beads), the
+git-backed issue tracker, and [BeadHive](https://github.com/beadhive/beadhive) (`bh`), the
+agentic git-flow tooling that dispatches beads to worktrees and merges them; both are described
+in `AGENTS.md` and `CLAUDE.md`. Outside contributors do not need any of that: a GitHub issue
+and a pull request are the whole process.
 
 ## License
 

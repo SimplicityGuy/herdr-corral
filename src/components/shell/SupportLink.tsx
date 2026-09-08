@@ -7,8 +7,8 @@
  * coral as the only accent — so the link is a plain anchor styled like `:diff`:
  * `subtext0` at rest, `text` on hover, the same padding as its neighbours. The
  * emoji and the wording are the ones the widget would have carried; only the
- * dress is corral's. Nothing is loaded from the vendor, which also keeps ADR-0001
- * true: corral still talks to no one until the user clicks.
+ * dress is herdr-corral's. Nothing is loaded from the vendor, which also keeps ADR-0001
+ * true: herdr-corral still talks to no one until the user clicks.
  */
 export const SUPPORT_URL = 'https://buymeacoffee.com/robert2'
 export const SUPPORT_TEXT = 'support my token budget'

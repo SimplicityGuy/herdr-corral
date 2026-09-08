@@ -168,10 +168,11 @@ MIT.
 
 ## Thanks
 
-corral exists because [herdr](https://herdr.dev) exists. Its documented reference is what
-`src/schema/reference.json` is generated from, its default config is what a fresh document starts
-on, and its own source is where the theme palettes were lifted from — so every setting corral
-knows how to edit, it learned from herdr. Thank you to everyone who builds and documents it.
+herdr-corral exists because [herdr](https://herdr.dev) exists. Its documented reference is what
+`src/schema/reference.json` is generated from, its default config is what a fresh document
+starts on, and its own source is where the theme palettes were lifted from — so every setting
+herdr-corral knows how to edit, it learned from herdr. Thank you to everyone who builds and
+documents it.
 
 Built on the shoulders of [Vite](https://vite.dev), [React](https://react.dev),
 [Tailwind CSS](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com),
