@@ -95,6 +95,24 @@ pnpm gen:reference   # regenerate src/schema/reference.json from herdr.dev
 
 `check` deliberately excludes e2e so the inner loop stays fast; CI runs both.
 
+## Releasing
+
+herdr-corral is served by Cloudflare Pages at [corral.x.w8k.us](https://corral.x.w8k.us),
+built from the `release` branch. Nothing reaches production by merging to `main`: every push
+to `main` and every pull request gets a preview deployment, and only a **version tag** moves
+`release`.
+
+```bash
+pnpm version minor        # or patch / major: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags    # the tag triggers .github/workflows/release.yml
+```
+
+The workflow refuses a tag that is not reachable from `main` or that does not equal `v` plus
+the version in `package.json`, runs `pnpm check` against the tagged commit, fast-forwards
+`release` to it, and publishes a GitHub release with generated notes. Cloudflare sees the push
+to `release` and deploys. To roll back, tag an earlier commit with a higher version, or reset
+`release` by hand.
+
 `test:e2e` builds and serves `dist/` on port 4173, and that port is one shared resource on the
 machine — two worktrees running it at once collide silently. Give each worktree its own port:
 

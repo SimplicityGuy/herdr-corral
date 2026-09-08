@@ -49,5 +49,3 @@ into beads. Each line names the file(s) involved; none of these block the v1 gat
   `ui.sidebar.agents.rows_by_agent.<id>` overrides the default rows for an agent, clicking that
   agent's row in the preview opens the default rows editor rather than that agent's own override —
   an ordering issue in `src/components/preview/regions.ts`.
-- **Deploy: the Cloudflare Pages project isn't wired yet.** ADR-0001 calls for hosting via
-  homelab's OpenTofu; that infrastructure change hasn't landed.

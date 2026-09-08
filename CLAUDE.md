@@ -86,6 +86,14 @@ PLAYWRIGHT_PORT=4180 pnpm test:e2e   # ... on a port of this worktree's own
 `check` deliberately excludes e2e so the inner loop stays fast. CI runs both. Unit tests come
 from `src/**` and `scripts/**`, so the schema generator is covered by the same gate as the app.
 
+### Releasing
+
+Production (Cloudflare Pages, `corral.x.w8k.us`) builds from the **`release`** branch, and only
+`.github/workflows/release.yml` moves it: a `vX.Y.Z` tag that sits on `main` and matches
+`package.json`'s `version` is gated with `pnpm check`, fast-forwarded onto `release`, and
+published as a GitHub release. `pnpm version <bump>` then `git push --follow-tags` is the whole
+ceremony. Merging to `main` deploys nothing but a preview.
+
 ### Running e2e in a worktree, alongside others
 
 `pnpm test:e2e` builds `dist/` and serves it on **4173**, and that port is one shared resource
