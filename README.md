@@ -1,4 +1,4 @@
-# corral
+# herdr-corral
 
 A visual editor for [herdr](https://herdr.dev)'s `config.toml`.
 

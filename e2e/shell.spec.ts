@@ -13,7 +13,7 @@ import { openConsole, openPreview } from './console.ts'
 test('the Console shell loads with its top line', async ({ page }) => {
   await openConsole(page)
 
-  await expect(page).toHaveTitle('corral')
+  await expect(page).toHaveTitle('herdr-corral')
 
   const topLine = page.getByRole('banner')
   await expect(topLine).toBeVisible()
