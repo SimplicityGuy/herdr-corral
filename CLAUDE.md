@@ -88,7 +88,7 @@ from `src/**` and `scripts/**`, so the schema generator is covered by the same g
 
 ### Releasing
 
-Production (Cloudflare Pages, `corral.x.w8k.us`) builds from the **`release`** branch, and only
+Production (Cloudflare Pages, `herdr-corral.pages.dev`) builds from the **`release`** branch, and only
 `.github/workflows/release.yml` moves it: a `vX.Y.Z` tag that sits on `main` and matches
 `package.json`'s `version` is gated with `pnpm check`, fast-forwarded onto `release`, and
 published as a GitHub release. `pnpm version <bump>` then `git push --follow-tags` is the whole

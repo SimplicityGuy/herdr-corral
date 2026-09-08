@@ -97,7 +97,7 @@ pnpm gen:reference   # regenerate src/schema/reference.json from herdr.dev
 
 ## Releasing
 
-herdr-corral is served by Cloudflare Pages at [corral.x.w8k.us](https://corral.x.w8k.us),
+herdr-corral is served by Cloudflare Pages at [herdr-corral.pages.dev](https://herdr-corral.pages.dev),
 built from the `release` branch. Nothing reaches production by merging to `main`: every push
 to `main` and every pull request gets a preview deployment, and only a **version tag** moves
 `release`.

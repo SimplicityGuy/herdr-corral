@@ -24,7 +24,7 @@ should be the one those agents get right most reliably.
   **oxlint** for linting. Package manager is **pnpm**. `pnpm check` runs typecheck, lint, unit
   tests and build; CI adds e2e.
 - **Hosting**: Cloudflare Pages, declared in homelab's OpenTofu like the org's other
-  static sites (`corral.x.w8k.us`). Production builds from the `release` branch, which only a
+  static sites (`herdr-corral.pages.dev`). Production builds from the `release` branch, which only a
   version tag moves (`.github/workflows/release.yml`); `main` and pull requests get previews.
 
 ## Alternatives considered

@@ -4,7 +4,7 @@
 # production branch, and git integration has no notion of tags — so production
 # is the `release` branch, and this workflow is the only thing that moves it.
 # Pushing `vX.Y.Z` runs the gate against that exact commit, then fast-forwards
-# `release` to it; Pages picks the push up and deploys corral.x.w8k.us. Pushes
+# `release` to it; Pages picks the push up and deploys herdr-corral.pages.dev. Pushes
 # to `main` only ever produce previews.
 #
 # Two checks keep a tag honest: it must be reachable from `main` (no releasing
