@@ -41,6 +41,7 @@ import { StatusBarView } from '@/components/editors/StatusBarEditor'
 import { ThemeView } from '@/components/editors/ThemeEditor'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
+import { HelpDialog } from '@/components/shell/HelpDialog'
 import { InlinePopover } from '@/components/shell/InlinePopover'
 import { Panel } from '@/components/shell/Panel'
 import { SettingsTree } from '@/components/shell/SettingsTree'
@@ -65,6 +66,7 @@ export default function App() {
         <DiagnosticsLine />
         <InlinePopover />
         <CommandPalette />
+        <HelpDialog />
         <ExportDialog />
       </div>
     </TooltipProvider>

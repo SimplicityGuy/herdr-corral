@@ -32,8 +32,6 @@ into beads. Each line names the file(s) involved; none of these block the v1 gat
   block rather than reporting the actual (larger) index range.
 - **Validation only checks a datetime setting for emptiness.** `src/model/validate.ts` accepts any
   non-empty string for a datetime-format field rather than checking it parses as one.
-- **The `ctrl+b ?` help hint in the top line is dead text.** `src/components/shell/TopLine.tsx`
-  advertises a help overlay that doesn't exist anywhere in the app.
 - **Whether the no-network sweep should grep for `import(` is worth revisiting.**
   `scripts/no-network.test.ts:20-30` currently excludes dynamic `import()` on purpose — Vite
   resolves it to a same-origin chunk, not a call home, and the string also appears in type

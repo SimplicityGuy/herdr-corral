@@ -19,6 +19,7 @@
  */
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/shell/Panel'
+import { RepoLink } from '@/components/shell/RepoLink'
 import { SupportLink } from '@/components/shell/SupportLink'
 import { Textarea } from '@/components/ui/textarea'
 import { FILE_NAME } from '@/lib/download'
@@ -213,7 +214,6 @@ export function Landing() {
                 <span className="min-w-0 flex-1 text-[12px] text-overlay0">
                   Nothing you open leaves this tab. corral has no server.
                 </span>
-                <SupportLink className="text-[12px]" />
                 <Button
                   type="button"
                   onClick={() => {
@@ -236,6 +236,13 @@ export function Landing() {
                   )}
                 </div>
               )}
+
+              {/* Their own line, so the note above keeps its width; the same two
+                  links the diagnostics line carries once a file is open. */}
+              <div className="flex items-center justify-end gap-[14px] text-[12px]">
+                <RepoLink />
+                <SupportLink />
+              </div>
             </div>
           </Panel>
         </div>

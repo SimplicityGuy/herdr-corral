@@ -1,6 +1,12 @@
 /**
  * The command palette — `ctrl+k` over every key and every action (ADR-0002).
  *
+ * It is also the command line. A bare `:` opens it with the colon already typed,
+ * so `:w` and `:diff` — the two verbs the diagnostics line prints — are `:`, the
+ * verb, enter, exactly as a vi user's fingers expect. The palette's own entries
+ * carry the verbs in their values, so the filter lands on the right one and enter
+ * runs it; nothing here parses a command string.
+ *
  * Jumping to a key is a *selection*, not a scroll: the palette switches to the
  * section that owns the key, clears the filter that might hide it, and selects it.
  * The tree follows the selection, moves the DOM focus onto the row and puts the
@@ -32,9 +38,10 @@ import { resetKey } from '@/lib/edit'
 import { UI_SECTIONS, homeOf } from '@/lib/sections'
 import { formatValue } from '@/lib/values'
 import { allKeys } from '@/schema'
+import { isBareShortcut } from '@/components/shell/keyboard'
 import { useConfigStore } from '@/store/config'
 import { useShellStore } from '@/store/shell'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * Runs `on` when it is unmounted, one microtask later.
@@ -58,8 +65,25 @@ function OnTeardown({ on }: { on: () => void }) {
   return null
 }
 
+/**
+ * The search box, starting on whatever the shell seeded — `':'` for the command
+ * line, nothing for `ctrl+k`. The dialog unmounts its content when it shuts, so
+ * this mounts fresh on every open and the seed is read once, as an initial value.
+ */
+function SeededInput({ seed }: { readonly seed: string }) {
+  const [query, setQuery] = useState(seed)
+  return (
+    <CommandInput
+      value={query}
+      onValueChange={setQuery}
+      placeholder="jump to a setting, or run a command"
+    />
+  )
+}
+
 export function CommandPalette() {
   const open = useShellStore((state) => state.paletteOpen)
+  const seed = useShellStore((state) => state.paletteSeed)
   const setPaletteOpen = useShellStore((state) => state.setPaletteOpen)
   const setSection = useShellStore((state) => state.setSection)
   // Memoized on the edit map, so this is one map identity per document change.
@@ -70,9 +94,18 @@ export function CommandPalette() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'k' || !(event.ctrlKey || event.metaKey)) return
-      event.preventDefault()
-      useShellStore.getState().setPaletteOpen(!useShellStore.getState().paletteOpen)
+      const shell = useShellStore.getState()
+      if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault()
+        shell.setPaletteOpen(!shell.paletteOpen)
+        return
+      }
+      // `:` is the command line. Bare, like `1`–`6`: a colon typed into a value
+      // field is a colon.
+      if (event.key === ':' && isBareShortcut(event) && !shell.paletteOpen) {
+        event.preventDefault()
+        shell.openPalette(':')
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
@@ -109,7 +142,7 @@ export function CommandPalette() {
           context from has to be supplied here. */}
       <Command className="bg-mantle">
         <OnTeardown on={land} />
-        <CommandInput placeholder="jump to a setting, or run a command" />
+        <SeededInput seed={seed} />
         <CommandList>
           <CommandEmpty>nothing matches</CommandEmpty>
 
@@ -156,6 +189,12 @@ export function CommandPalette() {
               onSelect={() => run(() => useShellStore.getState().openExport('diff'))}
             >
               {':diff  review the changes'}
+            </CommandItem>
+            <CommandItem
+              value="help keyboard shortcuts"
+              onSelect={() => run(() => useShellStore.getState().setHelpOpen(true))}
+            >
+              {'help  keyboard shortcuts'}
             </CommandItem>
             {UI_SECTIONS.map((section) => (
               <CommandItem
