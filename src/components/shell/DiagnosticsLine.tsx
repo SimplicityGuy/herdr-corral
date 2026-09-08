@@ -13,6 +13,9 @@
  * that one name, and a line that could be told to say something else would be
  * offering to write a file nothing downstream would produce.
  *
+ * The support link sits at the head of the right-hand cluster, dressed as one
+ * more verb (`SupportLink` says why it is not the vendor's button).
+ *
  * Neither verb writes anything itself any more: both open the export dialog, `:w`
  * on the file and `:diff` on the hunks, and the dialog is where the download, the
  * clipboard and the install snippet live. `:w` stays disabled while an error
@@ -20,6 +23,7 @@
  * the line is where invariant 6 is meant to be visible. `:diff` is never blocked,
  * because seeing what is wrong is exactly what a user with an error needs.
  */
+import { SupportLink } from '@/components/shell/SupportLink'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { summarize, useDiagnostics } from '@/lib/diagnostics'
 import { BLOCKED_REASON, FILE_NAME } from '@/lib/download'
@@ -53,7 +57,8 @@ export function DiagnosticsLine() {
         {firstWarning !== undefined && `  ${firstWarning.message}`}
       </span>
 
-      <span className="ml-auto shrink-0 px-3 text-subtext0">
+      <SupportLink className="ml-auto px-3" />
+      <span className="shrink-0 px-3 text-subtext0">
         {changed.length} {changed.length === 1 ? 'key' : 'keys'} changed
       </span>
       <button
