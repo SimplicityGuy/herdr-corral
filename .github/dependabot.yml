@@ -1,0 +1,75 @@
+---
+# Dependabot — https://docs.github.com/code-security/dependabot/dependabot-version-updates
+#
+# Two ecosystems, one PR each per week. corral is a static bundle with no server, so a
+# dependency bump is either a build-tool change or a change to what ships in dist/; either
+# way `pnpm check` and the e2e suite in ci.yml are the gate, and a grouped PR gives them one
+# thing to be green against rather than a dozen.
+#
+# The seven-day cooldown lets a release that is pulled or patched the same week go by
+# without a PR ever opening for it. Security updates are exempt from the cooldown by design.
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "ci"
+    assignees:
+      - "SimplicityGuy"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # npm (pnpm lockfile) — runtime and development dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "javascript"
+    assignees:
+      - "SimplicityGuy"
+    open-pull-requests-limit: 10
+    ignore:
+      # The runtime is a project constraint, pinned in CI (ci.yml) and `engines` alike, so the
+      # type package tracks that decision by hand rather than on the bot's schedule.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Everything that ships in dist/ — bump together, test the bundle once.
+      npm-production:
+        dependency-type: "production"
+        patterns:
+          - "*"
+      # Build, lint and test tooling — never reaches the user.
+      npm-development:
+        dependency-type: "development"
+        patterns:
+          - "*"
+      npm-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"

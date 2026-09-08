@@ -157,6 +157,30 @@ Then, by hand:
 tree clean, and it fails outright rather than writing a thin file if the page yields fewer than
 150 settings, so a site redesign gets noticed rather than silently accepted.
 
+## Contributing
+
+Bug reports, herdr-release bumps and fixes are all welcome — [CONTRIBUTING.md](CONTRIBUTING.md)
+has the setup, the gate, and the handful of invariants every change keeps.
+
 ## License
 
 MIT.
+
+## Thanks
+
+herdr-corral exists because [herdr](https://herdr.dev) exists. Its documented reference is what
+`src/schema/reference.json` is generated from, its default config is what a fresh document
+starts on, and its own source is where the theme palettes were lifted from — so every setting
+herdr-corral knows how to edit, it learned from herdr. Thank you to everyone who builds and
+documents it.
+
+Built on the shoulders of [Vite](https://vite.dev), [React](https://react.dev),
+[Tailwind CSS](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com),
+[dnd-kit](https://dndkit.com), [zustand](https://zustand.docs.pmnd.rs),
+[smol-toml](https://github.com/squirrelchat/smol-toml) and the
+[Catppuccin](https://catppuccin.com) palette, in
+[JetBrains Mono](https://www.jetbrains.com/lp/mono/).
+
+---
+
+Made with ❤️ in the PNW.

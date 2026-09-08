@@ -1,4 +1,5 @@
 import { DiagnosticsLine } from '@/components/shell/DiagnosticsLine'
+import { SUPPORT_TEXT, SUPPORT_URL } from '@/components/shell/SupportLink'
 import { BLOCKED_REASON } from '@/lib/download'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { resetConfigStore, useConfigStore } from '@/store/config'
@@ -62,6 +63,16 @@ describe('DiagnosticsLine', () => {
     show()
 
     expect(screen.getByText(/1 warning/)).toHaveTextContent('not-a-theme')
+  })
+
+  it('links to buy me a coffee in a new tab, styled as a verb rather than the vendor widget', () => {
+    show()
+
+    const link = screen.getByRole('link', { name: new RegExp(SUPPORT_TEXT) })
+    expect(link).toHaveAttribute('href', SUPPORT_URL)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    expect(document.querySelector('script[src*="buymeacoffee"]')).toBeNull()
   })
 
   it('offers the download while the config is clean', () => {
