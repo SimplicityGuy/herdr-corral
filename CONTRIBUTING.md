@@ -119,6 +119,14 @@ version:
 | `scripts/` | the schema generator and the no-network sweep |
 | `docs/design/` | ADRs and the visual contract |
 
+## Releases
+
+Merging to `main` does not deploy. The maintainer cuts a version tag (`pnpm version <bump>`,
+then `git push --follow-tags`), and the release workflow promotes that commit to the `release`
+branch Cloudflare Pages builds from — the README's "Releasing" section has the details. Every
+pull request still gets its own preview deployment, so you can see your change live before it
+is released.
+
 ## Issue tracking for maintainers
 
 The maintainer drives work through [beads](https://github.com/gastownhall/beads), the

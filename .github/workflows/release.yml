@@ -1,0 +1,75 @@
+# Release: a version tag promotes one commit of `main` to production.
+#
+# Cloudflare Pages builds this app from git and deploys whatever lands on its
+# production branch, and git integration has no notion of tags — so production
+# is the `release` branch, and this workflow is the only thing that moves it.
+# Pushing `vX.Y.Z` runs the gate against that exact commit, then fast-forwards
+# `release` to it; Pages picks the push up and deploys herdr-corral.pages.dev. Pushes
+# to `main` only ever produce previews.
+#
+# Two checks keep a tag honest: it must be reachable from `main` (no releasing
+# a branch), and it must equal `v` + the `version` in package.json (no shipping
+# a build that calls itself something else). `pnpm version <bump>` produces
+# both the commit and the tag in one go — see README "Releasing".
+#
+# The push uses the workflow token, which (by design) triggers no further
+# workflow runs; Cloudflare listens on the repository's push webhook, which the
+# push does fire.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: promote ${{ github.ref_name }} to production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: The tag must sit on main and name the version in package.json
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="v$(jq -r .version package.json)"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag $tag does not match package.json version $version"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $tag ($GITHUB_SHA) is not reachable from main"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate
+        run: pnpm check
+
+      - name: Promote to the release branch
+        run: |
+          set -euo pipefail
+          git push --force origin "${GITHUB_SHA}:refs/heads/release"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "${GITHUB_REF_NAME}"
