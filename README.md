@@ -68,10 +68,12 @@ the keys that draw what you clicked.
 | `d` | reset the focused key to herdr's default |
 | `u` | undo |
 | `ctrl+k` | open the command palette, over every key and action |
+| `:` | the command line: `:w` opens the export dialog on the full file, `:diff` on the changed hunks |
+| `ctrl+b ?` | the help sheet, with this table in it |
 
-`:w` and `:diff` aren't keystrokes — they're the diagnostics line's own buttons (and, typed into
-the command palette above, two of its entries), opening the export dialog on the full file
-(blocked while errors stand) and on the changed hunks, respectively.
+`:` opens the palette with the colon already typed, so `:w` and `:diff` are the verb and enter,
+the way a vi user expects. Both are also the diagnostics line's own buttons. `:w` is blocked while
+errors stand; `:diff` never is, because seeing what's wrong is exactly what you need then.
 
 ## Develop
 

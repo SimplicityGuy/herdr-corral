@@ -114,6 +114,50 @@ test('the whole shell is reachable from the keyboard alone', async ({ page }) =>
 })
 
 /**
+ * The two things the chrome advertises that are not buttons: the `:` command line
+ * the diagnostics line's verbs imply, and the `ctrl+b ?` chord the top line prints.
+ */
+test('`:` is a command line and `ctrl+b ?` opens the help', async ({ page }) => {
+  await openConsole(page)
+
+  // `:diff` — the colon opens the palette with itself typed, the verb finishes it.
+  await page.keyboard.press(':')
+  await expect(page.getByRole('combobox')).toHaveValue(':')
+  await page.keyboard.type('diff')
+  await page.keyboard.press('Enter')
+  const exportDialog = page.getByRole('dialog', { name: /^:w/ })
+  await expect(exportDialog).toBeVisible()
+  await expect(exportDialog.getByRole('tab', { selected: true })).toHaveText(/hunks|diff/i)
+  await page.keyboard.press('Escape')
+  await expect(exportDialog).toBeHidden()
+
+  // `:w` — the same door the button opens, on the file.
+  await page.keyboard.press(':')
+  await page.keyboard.type('w')
+  await page.keyboard.press('Enter')
+  await expect(exportDialog).toBeVisible()
+  await expect(exportDialog.getByRole('tab', { selected: true })).toHaveText(/file/i)
+  await page.keyboard.press('Escape')
+  await expect(exportDialog).toBeHidden()
+
+  // `ctrl+b ?` is a prefix chord; the sheet lists the keys, esc closes it.
+  await page.keyboard.press('ControlOrMeta+b')
+  await page.keyboard.press('?')
+  const help = page.getByRole('dialog', { name: 'help' })
+  await expect(help).toBeVisible()
+  await expect(help).toContainText('ctrl+k')
+  await page.keyboard.press('Escape')
+  await expect(help).toBeHidden()
+
+  // The links beside the verbs open the repository and the support page.
+  const footer = page.getByRole('contentinfo')
+  await expect(footer.getByRole('link', { name: /star on github/ })).toHaveAttribute(
+    'href',
+    'https://github.com/SimplicityGuy/herdr-corral',
+  )
+})
+
+/**
  * ADR-0002 gives the top line 30px and asks the shell to hold together down to
  * 960 wide. The switches are the line's job, so they never wrap; the hints give
  * way instead.

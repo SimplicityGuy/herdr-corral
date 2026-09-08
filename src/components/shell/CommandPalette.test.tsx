@@ -25,6 +25,54 @@ describe('CommandPalette', () => {
     expect(useShellStore.getState().paletteOpen).toBe(false)
   })
 
+  it('opens on `:` with the colon already typed, so `:diff` and enter is a command', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard(':')
+    expect(screen.getByRole('combobox')).toHaveValue(':')
+
+    await user.keyboard('diff{Enter}')
+    expect(useShellStore.getState().exportTab).toBe('diff')
+    expect(useShellStore.getState().paletteOpen).toBe(false)
+  })
+
+  it('runs `:w` from the command line while the config is clean', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard(':w{Enter}')
+    expect(useShellStore.getState().exportTab).toBe('file')
+  })
+
+  it('leaves `:` alone while the focus is in a text field', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <CommandPalette />
+        <input aria-label="somewhere to type" />
+      </>,
+    )
+
+    await user.click(screen.getByRole('textbox', { name: 'somewhere to type' }))
+    await user.keyboard(':')
+
+    expect(useShellStore.getState().paletteOpen).toBe(false)
+    expect(screen.getByRole('textbox', { name: 'somewhere to type' })).toHaveValue(':')
+  })
+
+  it('opens the help sheet from the palette', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(screen.getByRole('combobox'), 'help')
+    await user.click(await screen.findByRole('option', { name: /^help keyboard/ }))
+
+    expect(useShellStore.getState().helpOpen).toBe(true)
+    expect(useShellStore.getState().paletteOpen).toBe(false)
+  })
+
   it('jumps to a key: opens its section and selects it', async () => {
     const user = userEvent.setup()
     useShellStore.getState().setSection('all')

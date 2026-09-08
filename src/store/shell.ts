@@ -99,6 +99,14 @@ export interface ShellState {
   readonly editor: EditorTarget | null
   readonly paletteOpen: boolean
   /**
+   * What the palette's input already says when it opens. `''` for `ctrl+k`;
+   * `':'` for the `:` key, which is how `:w` and `:diff` become keystrokes — the
+   * colon is typed for the user, the verb and enter finish it.
+   */
+  readonly paletteSeed: string
+  /** The `ctrl+b ?` help sheet. */
+  readonly helpOpen: boolean
+  /**
    * True until a config is in the editor: the landing owns the screen first.
    *
    * A session that has not started and one that started from herdr's defaults are
@@ -131,6 +139,9 @@ export interface ShellActions {
   /** Close the popover. The value stays whatever the editor last applied. */
   closeEditor(): void
   setPaletteOpen(open: boolean): void
+  /** Open the palette with `seed` already in its input. */
+  openPalette(seed?: string): void
+  setHelpOpen(open: boolean): void
   /** Leave the landing for the editor, or send the user back to it. */
   setLanding(landing: boolean): void
   /** Open the export dialog on one of its tabs. */
@@ -155,6 +166,8 @@ export function initialShellState(): ShellState {
     filter: '',
     editor: null,
     paletteOpen: false,
+    paletteSeed: '',
+    helpOpen: false,
     landing: true,
     exportTab: null,
   }
@@ -193,14 +206,24 @@ export const useShellStore = create<ShellStore>()((write) => ({
   },
 
   setPaletteOpen(open) {
-    write({ paletteOpen: open })
+    write({ paletteOpen: open, paletteSeed: '', ...(open ? { helpOpen: false } : {}) })
+  },
+
+  openPalette(seed = '') {
+    write({ paletteOpen: true, paletteSeed: seed, helpOpen: false })
+  },
+
+  setHelpOpen(open) {
+    // One overlay at a time: the help over the palette would be a sheet about
+    // keys drawn over the thing those keys are for.
+    write({ helpOpen: open, ...(open ? { paletteOpen: false } : {}) })
   },
 
   setLanding(landing) {
     // Going back to the landing takes the chrome's own overlays with it; leaving
     // one open over a screen that no longer has a document behind it is a popover
     // editing a key nobody can see.
-    write({ landing, editor: null, paletteOpen: false, exportTab: null })
+    write({ landing, editor: null, paletteOpen: false, helpOpen: false, exportTab: null })
   },
 
   openExport(tab = 'file') {
