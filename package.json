@@ -1,7 +1,7 @@
 {
   "name": "herdr-corral",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Visual editor for herdr's config.toml.",
   "license": "MIT",
   "type": "module",
