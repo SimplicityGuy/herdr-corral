@@ -30,26 +30,26 @@ const symbols: RowContext = { palette, indicators: 'symbols' }
 const claude = SAMPLE_AGENTS[0]
 const codex = SAMPLE_AGENTS[1]
 const gemini = SAMPLE_AGENTS[2]
-const pi = SAMPLE_AGENTS[3]
-const phaze = SAMPLE_SPACES[0]
+const kimi = SAMPLE_AGENTS[3]
+const homelab = SAMPLE_SPACES[0]
 
-/** What each built-in draws for `claude`, the working agent in `phaze`. */
+/** What each built-in draws for `claude`, the working agent in `homelab`. */
 const AGENT_TOKENS: Readonly<Record<string, string>> = {
   state_icon: '●',
   state_text: 'working',
-  workspace: 'phaze',
-  tab: 'api',
+  workspace: 'homelab',
+  tab: 'infra',
   pane: '1',
   agent: 'claude',
-  terminal_title: '✳ claude — src/api/routes.py',
-  terminal_title_stripped: 'claude — src/api/routes.py',
+  terminal_title: '✳ claude — compose/traefik.yml',
+  terminal_title_stripped: 'claude — compose/traefik.yml',
 }
 
-/** …and for `phaze`, the working space. */
+/** …and for `homelab`, the working space. */
 const SPACE_TOKENS: Readonly<Record<string, string>> = {
   state_icon: '●',
   state_text: 'working',
-  workspace: 'phaze',
+  workspace: 'homelab',
   branch: 'main',
   git_status: '+2 ~1',
 }
@@ -64,7 +64,7 @@ describe('built-in tokens', () => {
   it.each(sidebarTokenBuiltins('spaces'))('draws the space token %s', (token) => {
     const expected = SPACE_TOKENS[token]
     expect(expected, `no expectation for the space token ${token}`).toBeDefined()
-    expect(tokenText(token, phaze, context)).toBe(expected)
+    expect(tokenText(token, homelab, context)).toBe(expected)
   })
 
   it('covers every built-in of both kinds and invents none', () => {
@@ -74,7 +74,7 @@ describe('built-in tokens', () => {
 
   it('draws nothing for a token the subject has no field for', () => {
     // `tab` is an agent built-in; a space has no tab, so the token is dropped.
-    expect(tokenText('tab', phaze, context)).toBeNull()
+    expect(tokenText('tab', homelab, context)).toBeNull()
   })
 
   it('draws nothing for a token herdr does not define', () => {
@@ -84,24 +84,24 @@ describe('built-in tokens', () => {
 
 describe('status indicators', () => {
   it('tells the four states apart by colour under dots', () => {
-    for (const agent of [claude, codex, gemini, pi]) {
+    for (const agent of [claude, codex, gemini, kimi]) {
       expect(stateIcon(agent.state, 'dots')).toMatch(/[●○]/)
     }
-    const colors = [claude, codex, gemini, pi].map((agent) =>
+    const colors = [claude, codex, gemini, kimi].map((agent) =>
       tokenColor('state_icon', agent, palette),
     )
     expect(new Set(colors).size).toBe(4)
   })
 
   it('gives each state its own glyph under symbols', () => {
-    const glyphs = [claude, codex, gemini, pi].map((agent) => stateIcon(agent.state, 'symbols'))
+    const glyphs = [claude, codex, gemini, kimi].map((agent) => stateIcon(agent.state, 'symbols'))
     expect(glyphs).toEqual(['▶', '!', '·', '✓'])
     expect(new Set(glyphs).size).toBe(4)
   })
 
   it('reads the indicator setting through renderToken', () => {
-    expect(renderToken('state_icon', pi, context)?.text).toBe('●')
-    expect(renderToken('state_icon', pi, symbols)?.text).toBe('✓')
+    expect(renderToken('state_icon', kimi, context)?.text).toBe('●')
+    expect(renderToken('state_icon', kimi, symbols)?.text).toBe('✓')
   })
 })
 
@@ -118,8 +118,8 @@ describe('agent states', () => {
 describe('custom tokens', () => {
   it('draws a $name from the subject metadata', () => {
     expect(tokenText('$model', claude, context)).toBe('opus-5')
-    expect(tokenText('$ticket', claude, context)).toBe('PHZ-412')
-    expect(tokenText('$jj_status', phaze, context)).toBe('@ wqrs')
+    expect(tokenText('$ticket', claude, context)).toBe('hl-412')
+    expect(tokenText('$jj_status', homelab, context)).toBe('@ wqrs')
   })
 
   it('is how the sample carries what no built-in token names', () => {
@@ -127,7 +127,7 @@ describe('custom tokens', () => {
     // have no built-in token, so they are metadata — which means a row can ask
     // for them, and does here.
     expect(rowText(renderRow(['state_text', '$age'], claude, context))).toBe('working 12m')
-    expect(rowText(renderRow(['workspace', '$agents'], phaze, context))).toBe('phaze 2')
+    expect(rowText(renderRow(['workspace', '$agents'], homelab, context))).toBe('homelab 1')
   })
 
   it('draws nothing when nothing reported the value', () => {
@@ -151,7 +151,7 @@ describe('token styles', () => {
     )
     expect(drawn).toEqual({
       token: 'workspace',
-      text: 'phaze',
+      text: 'homelab',
       color: '#89b4fa',
       bold: true,
       dim: true,
@@ -159,8 +159,8 @@ describe('token styles', () => {
   })
 
   it('preserves the contextual default for an omitted field', () => {
-    const drawn = renderToken({ token: 'branch', bold: true }, phaze, context)
-    expect(drawn?.color).toBe(tokenColor('branch', phaze, palette))
+    const drawn = renderToken({ token: 'branch', bold: true }, homelab, context)
+    expect(drawn?.color).toBe(tokenColor('branch', homelab, palette))
     expect(drawn?.bold).toBe(true)
     expect(drawn?.dim).toBe(false)
   })
@@ -186,13 +186,13 @@ describe('rows', () => {
   it('draws a row in order and reads back as text', () => {
     const row = renderRow(['state_icon', 'workspace', 'tab'], claude, context)
     expect(row.map((token) => token.token)).toEqual(['state_icon', 'workspace', 'tab'])
-    expect(rowText(row)).toBe('● phaze api')
+    expect(rowText(row)).toBe('● homelab infra')
   })
 
   it('drops rows that resolve to nothing rather than leaving a blank line', () => {
     const drawn = renderRows([['workspace'], ['$ticket']], gemini, context)
     expect(drawn).toHaveLength(1)
-    expect(rowText(drawn[0])).toBe('phaze/docs')
+    expect(rowText(drawn[0])).toBe('groovemap-music/design')
   })
 
   it('answers an empty list for a value that is not a list of rows', () => {

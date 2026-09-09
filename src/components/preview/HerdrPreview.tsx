@@ -83,7 +83,7 @@ const DESKTOP_COLUMNS = 120
 const NARROW_COLUMNS = 44
 
 /** The space the mock treats as focused. */
-const ACTIVE_SPACE = 'phaze'
+const ACTIVE_SPACE = 'homelab'
 
 /** The preview's line height, so a `row_gap` of 1 is one blank line. */
 const LINE_HEIGHT = 1.45

@@ -201,38 +201,38 @@ describe('the theme', () => {
 describe('the sidebar rows', () => {
   it('redraws every agent row from ui.sidebar.agents.rows', () => {
     render(<HerdrPreview />)
-    expect(agentRow('claude')).toHaveTextContent('phaze')
-    expect(agentRow('claude')).toHaveTextContent('api')
+    expect(agentRow('claude')).toHaveTextContent('homelab')
+    expect(agentRow('claude')).toHaveTextContent('infra')
 
     set('ui.sidebar.agents.rows', [['agent', '$model']])
     expect(agentRow('claude')).toHaveTextContent('claudeopus-5')
-    expect(agentRow('claude')).not.toHaveTextContent('phaze')
+    expect(agentRow('claude')).not.toHaveTextContent('homelab')
   })
 
   it('lets rows_by_agent override one agent and leave the rest alone', () => {
     render(<HerdrPreview />)
     set('ui.sidebar.agents.rows_by_agent.claude', [['terminal_title_stripped']])
 
-    expect(agentRow('claude')).toHaveTextContent('claude — src/api/routes.py')
-    expect(agentRow('codex')).toHaveTextContent('gruvax')
+    expect(agentRow('claude')).toHaveTextContent('claude — compose/traefik.yml')
+    expect(agentRow('codex')).toHaveTextContent('beadhive')
   })
 
   it('redraws the space rows from ui.sidebar.spaces.rows', () => {
     render(<HerdrPreview />)
-    const phaze = () => screen.getByRole('button', { name: 'space phaze' })
-    expect(phaze()).toHaveTextContent('main')
+    const homelab = () => screen.getByRole('button', { name: 'space homelab' })
+    expect(homelab()).toHaveTextContent('main')
 
     set('ui.sidebar.spaces.rows', [['workspace', '$jj_status']])
-    expect(phaze()).toHaveTextContent('@ wqrs')
-    expect(phaze()).not.toHaveTextContent('main')
+    expect(homelab()).toHaveTextContent('@ wqrs')
+    expect(homelab()).not.toHaveTextContent('main')
   })
 
   it('swaps the state marks on ui.status_indicators', () => {
     render(<HerdrPreview />)
-    expect(agentRow('pi')).toHaveTextContent('●')
+    expect(agentRow('kimi')).toHaveTextContent('●')
 
     set('ui.status_indicators', 'symbols')
-    expect(agentRow('pi')).toHaveTextContent('✓')
+    expect(agentRow('kimi')).toHaveTextContent('✓')
     expect(agentRow('codex')).toHaveTextContent('!')
   })
 
@@ -270,12 +270,13 @@ describe('the sidebar rows', () => {
       [...(part('agents') as HTMLElement).querySelectorAll<HTMLElement>('[data-agent]')].map(
         (node) => node.dataset.agent,
       )
-    // By space: the sample's space order is phaze, phaze/docs, homelab, gruvax.
-    expect(order()).toEqual(['claude', 'gemini', 'pi', 'codex'])
+    // By space: the sample's space order is homelab, beadhive, cronduit,
+    // groovemap-music, groovemap-music/design.
+    expect(order()).toEqual(['claude', 'codex', 'kimi', 'gemini'])
 
     // Blocked first: the attention queue leads with the agent waiting on a person.
     set('ui.agent_panel_sort', 'priority')
-    expect(order()).toEqual(['codex', 'claude', 'pi', 'gemini'])
+    expect(order()).toEqual(['codex', 'claude', 'kimi', 'gemini'])
   })
 
   it('styles a token the way the row asked', () => {
@@ -358,7 +359,7 @@ describe('the toast', () => {
 
     set('ui.toast.delivery', 'herdr')
     const toast = screen.getByRole('button', { name: 'notification toast' })
-    expect(toast).toHaveTextContent('claude · phaze')
+    expect(toast).toHaveTextContent('claude · homelab')
     expect(toast.style.border).not.toContain('dashed')
   })
 })

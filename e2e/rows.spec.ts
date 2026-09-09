@@ -24,7 +24,7 @@ test('the spaces region and the rows_by_agent tree row open the same editor', as
   await openPreview(page)
 
   const preview = page.getByRole('region', { name: /^preview/ })
-  await preview.getByRole('button', { name: /^space phaze$/ }).click()
+  await preview.getByRole('button', { name: /^space homelab$/ }).click()
   const spaces = page.getByRole('dialog', { name: 'ui.sidebar.spaces.rows' })
   await expect(spaces).toBeVisible()
   await expect(spaces.getByRole('button', { name: 'add branch' })).toBeVisible()
