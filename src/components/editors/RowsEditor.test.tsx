@@ -526,7 +526,7 @@ describe('the preview behind it', () => {
     )
 
     const row = screen.getByRole('button', { name: 'agent claude' })
-    expect(row).toHaveTextContent('phaze')
+    expect(row).toHaveTextContent('homelab')
     expect(row).not.toHaveTextContent('working')
 
     await user.click(chip('agent in row 2, token 1'))

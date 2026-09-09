@@ -71,7 +71,7 @@ const CLICKS: readonly (readonly [string, RegionId, string])[] = [
   ['agent claude', 'agents', 'ui.sidebar.agents.rows'],
   ['tab bar status entries', 'tab-bar-right', 'ui.tab_bar_right'],
   ['notification toast, delivery off', 'toast', 'ui.toast.herdr.position'],
-  ['space phaze', 'spaces', 'ui.sidebar.spaces.rows'],
+  ['space homelab', 'spaces', 'ui.sidebar.spaces.rows'],
   ['tab bar', 'tab-bar', 'ui.tab_bar_position'],
   ['pane zsh', 'panes', 'ui.pane_borders'],
   ['sidebar width, 26 columns', 'sidebar', 'ui.sidebar_width'],

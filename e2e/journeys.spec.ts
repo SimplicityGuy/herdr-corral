@@ -133,7 +133,7 @@ test('a token carried into spaces row 1 changes exactly one line of the file', a
 
   await page
     .getByRole('region', { name: /^preview/ })
-    .getByRole('button', { name: /^space phaze$/ })
+    .getByRole('button', { name: /^space homelab$/ })
     .click()
   const popover = page.getByRole('dialog', { name: 'ui.sidebar.spaces.rows' })
   await expect(popover).toBeVisible()
