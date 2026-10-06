@@ -29,7 +29,12 @@ updates:
     assignees:
       - "SimplicityGuy"
     groups:
-      actions:
+      actions-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
+      actions-version:
+        applies-to: "version-updates"
         patterns:
           - "*"
 
@@ -59,17 +64,11 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     groups:
-      # Everything that ships in dist/ — bump together, test the bundle once.
-      npm-production:
-        dependency-type: "production"
-        patterns:
-          - "*"
-      # Build, lint and test tooling — never reaches the user.
-      npm-development:
-        dependency-type: "development"
-        patterns:
-          - "*"
       npm-security:
         applies-to: "security-updates"
+        patterns:
+          - "*"
+      npm-version:
+        applies-to: "version-updates"
         patterns:
           - "*"
